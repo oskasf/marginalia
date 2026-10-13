@@ -4,3 +4,4 @@ test/**
 .gitignore
 *.vsix
 node_modules/**
+images/**

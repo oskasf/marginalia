@@ -4,11 +4,17 @@ Overleaf-style comments for LaTeX in VS Code. Select text in a `.tex` file, leav
 
 Your papers stay in your own editor and repository; nothing is uploaded anywhere. It works the same in Markdown, code or any other text file you turn it on for, see [Other file types](#other-file-types).
 
+![Review cards in the sidebar beside a LaTeX file](images/review-sidebar.png)
+
 ## Getting started
 
 1. Install Marginalia from the Extensions view and open your paper's folder.
 2. Select some text in a `.tex` file, right-click and choose "Add comment on selection", or press Ctrl+K then Ctrl+M (Cmd+K then Cmd+M on a Mac). With nothing selected it uses the whole line. A card opens at the top of the sidebar: type your comment and press Enter to post it, or Esc to cancel.
 3. Commented text is highlighted. Hover over it to see the comment in a popup. Resolve in the popup resolves it, and Reply opens the sidebar with your cursor in that comment's reply box.
+
+![Adding a comment on a selected line](images/add-comment.png)
+
+![Hovering over commented text shows the comment with Resolve and Reply](images/hover.png)
 
 ## The sidebar
 
@@ -21,6 +27,7 @@ At the bottom, a "Comments file" section shows where your comments are kept. Cli
 To keep the cards beside your text, drag the Marginalia icon from the left activity bar to the right edge of the window. The yellow ticks on the scrollbar show where the open comments are. The cards use the same colours for the quote bar and the outline of the active card. Both colours can be changed under `workbench.colorCustomizations` as `marginalia.highlightBackground` and `marginalia.overviewRuler`.
 
 If something does not work, open View > Output and choose "Marginalia" from the dropdown. Errors are printed there.
+
 
 ## Other file types
 
