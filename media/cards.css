@@ -1,0 +1,178 @@
+body {
+  padding: 4px 8px 12px;
+  font-family: var(--vscode-font-family);
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--vscode-foreground);
+}
+
+.file {
+  margin: 10px 2px 4px;
+  font-size: 11px;
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card {
+  margin: 0 0 6px;
+  padding: 5px 8px 6px;
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.35)));
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.card:hover {
+  border-color: var(--vscode-focusBorder, rgba(128, 128, 128, 0.7));
+}
+
+.card.active {
+  border-color: var(--vscode-marginalia-overviewRuler, var(--vscode-focusBorder));
+  box-shadow: 0 0 0 1px var(--vscode-marginalia-overviewRuler, var(--vscode-focusBorder));
+}
+
+.card.compose {
+  cursor: default;
+}
+
+.card.resolved {
+  opacity: 0.7;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.author {
+  font-weight: 600;
+}
+
+.meta {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.spacer {
+  flex: 1;
+}
+
+button.link {
+  padding: 0 2px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--vscode-textLink-foreground);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+button.link.del {
+  opacity: 0;
+}
+
+.card:hover button.link.del,
+.card.active button.link.del,
+.card:focus-within button.link.del {
+  opacity: 1;
+}
+
+button.link:hover {
+  text-decoration: underline;
+}
+
+.quote {
+  margin: 3px 0 4px;
+  padding-left: 6px;
+  font-style: italic;
+  opacity: 0.75;
+  border-left: 3px solid var(--vscode-marginalia-highlightBackground, var(--vscode-editor-findMatchHighlightBackground, rgba(255, 200, 0, 0.85)));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quote:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.note {
+  margin-bottom: 3px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.note.warn {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+  opacity: 1;
+}
+
+.body {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.reply {
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.4));
+}
+
+.reply .meta {
+  margin-left: 6px;
+}
+
+.replybox {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 22px;
+  max-height: 110px;
+  margin-top: 5px;
+  padding: 2px 6px;
+  font: inherit;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 3px;
+  resize: none;
+  overflow-y: auto;
+}
+
+.card:not(.active):not(.hasdraft) .replybox {
+  min-height: 0;
+  max-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+}
+
+.replybox:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.replybox::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.resolvedgroup {
+  margin-top: 10px;
+}
+
+.resolvedgroup summary {
+  margin-bottom: 4px;
+  font-size: 11px;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.empty {
+  margin: 12px 2px;
+  opacity: 0.7;
+}
