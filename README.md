@@ -63,7 +63,7 @@ Each line of `.comments.jsonl` is one JSON object. People and LLMs can add comme
 
 - A thread needs `file` (relative to the root) and `exact` (the text to attach to). `id` is optional, and may only use letters, digits, `_` and `-`.
 - `prefix`, `suffix` and `offset` are optional. They tell apart copies of the same words.
-- The extension also writes `ts` timestamps, `anchor` lines (which move a comment to edited text) and `delete` lines.
+- The extension also writes `ts` timestamps, `anchor` lines (which move a comment to edited text), `move` lines (when a file is renamed or moved in VS Code) and `delete` lines.
 - Lines that aren't valid JSON are skipped. This includes git conflict markers.
 
 ## Development

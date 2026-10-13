@@ -5,10 +5,11 @@ const os = require('os');
 const crypto = require('crypto');
 const { promisify } = require('util');
 const { execFile } = require('child_process');
-const { parse, append } = require('./store');
-const { squash, makeAnchor, findAnchor, toPos } = require('./anchor');
+const { parse, read, append } = require('./store');
+const { squash, makeAnchor, findAnchor, lineStarts, toPos } = require('./anchor');
 
 const exec = promisify(execFile);
+const MAX_FILE = 20 * 1024 * 1024; // larger files, and anything that is not a plain file, are not read for comments
 
 async function activate(context) {
   const folder = vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === 'file')?.uri.fsPath;
@@ -165,6 +166,19 @@ async function activate(context) {
     },
   });
 
+  const parsed = new Map(); // file -> its text with the squashed copy and line starts, reused while the text is unchanged
+  const readFile = (rel) => {
+    const open = vscode.workspace.textDocuments.find((d) => relOf(d.uri) === rel);
+    if (open) return open.getText();
+    try {
+      const full = path.join(root, rel);
+      const info = fs.statSync(full);
+      return info.isFile() && info.size <= MAX_FILE ? fs.readFileSync(full, 'utf8') : null;
+    } catch {
+      return null;
+    }
+  };
+
   function render(onlyFile) {
     try {
       const marks = new Map();
@@ -172,12 +186,13 @@ async function activate(context) {
       for (const t of data.values()) {
         if (onlyFile && t.file !== onlyFile) continue;
         if (!files.has(t.file)) {
-          const open = vscode.workspace.textDocuments.find((d) => relOf(d.uri) === t.file);
-          let text = null;
-          try {
-            text = open ? open.getText() : fs.readFileSync(path.join(root, t.file), 'utf8');
-          } catch {}
-          files.set(t.file, text === null ? null : { text, sq: squash(text) });
+          const text = readFile(t.file);
+          let entry = parsed.get(t.file);
+          if (text === null) entry = null;
+          else if (entry?.text !== text) entry = { text, sq: squash(text), starts: lineStarts(text) };
+          if (entry) parsed.set(t.file, entry);
+          else parsed.delete(t.file);
+          files.set(t.file, entry);
         }
         const file = files.get(t.file);
         const prev = live.get(t.id);
@@ -187,8 +202,8 @@ async function activate(context) {
 
         let lv;
         if (found) {
-          const a = toPos(file.text, found.start);
-          const b = toPos(file.text, found.end);
+          const a = toPos(file.text, found.start, file.starts);
+          const b = toPos(file.text, found.end, file.starts);
           const anchor = makeAnchor(file.text, found.start, found.end);
           // edited until the new wording is saved to the store
           const status = squash(anchor.exact).s === squash(t.exact).s ? 'exact' : 'edited';
@@ -199,7 +214,7 @@ async function activate(context) {
         }
         live.set(t.id, lv);
 
-        const sig = [t.messages.length, t.resolved, lv.status, lv.line].join('|');
+        const sig = [t.file, t.messages.length, t.resolved, lv.status, lv.line].join('|');
         if (shown.get(t.id) !== sig) {
           shown.set(t.id, sig);
           changed = true;
@@ -224,9 +239,17 @@ async function activate(context) {
   }
 
   // Rereads the store when it changed (or when forced), then refreshes
+  let storeProblem = null;
   async function reload(force) {
     try {
-      const text = fs.existsSync(storePath) ? fs.readFileSync(storePath, 'utf8') : null;
+      let text = null;
+      try {
+        text = read(storePath);
+        storeProblem = null;
+      } catch (e) {
+        if (storeProblem !== e.message) vscode.window.showWarningMessage(`Marginalia: ${e.message}.`);
+        storeProblem = e.message;
+      }
       if (text === lastText && force !== true) return;
       lastText = text;
       data = text === null ? new Map() : parse(text);
@@ -246,6 +269,10 @@ async function activate(context) {
   // Redraws the comments from the files as they are now and rechecks whether git shares the store, without rereading it
   async function refresh() {
     render();
+    return checkSharing();
+  }
+
+  async function checkSharing() {
     if (!storageView.visible) return;
     let [label, note, icon] = ['Stays on this computer', 'not in a git repository', 'device-desktop'];
     const inRepo = lastText !== null && (await git(root, 'rev-parse', '--is-inside-work-tree')) !== null;
@@ -271,6 +298,7 @@ async function activate(context) {
     const top = path.resolve(folder, config.get('root') || (await git(folder, 'rev-parse', '--show-cdup')) || '.');
     const name = config.get('author') || (await git(top, 'config', 'user.name')) || os.userInfo().username;
     if (run !== runs) return; // a newer run has started
+    if (top !== root) pending = null; // a comment being typed survives other setting changes
     root = top;
     storePath = path.join(root, '.comments.jsonl');
     author = name;
@@ -282,16 +310,17 @@ async function activate(context) {
     selector = [config.get('files')].flat().filter((glob) => glob && typeof glob === 'string').map((glob) => ({ scheme: 'file', pattern: new vscode.RelativePattern(vscode.Uri.file(root), glob) }));
     // so a file that is not open is redrawn when it changes on disk, as after a git pull
     const files = selector.map(({ pattern }) => vscode.workspace.createFileSystemWatcher(pattern));
+    const fromDisk = (uri) => touch(uri, true);
     for (const w of files) {
-      w.onDidChange(touch);
-      w.onDidCreate(touch);
+      w.onDidChange(fromDisk);
+      w.onDidCreate(fromDisk);
       w.onDidDelete(touch);
     }
     watchers = [store, ...files];
     setFileKey(vscode.window.activeTextEditor);
     live.clear();
     shown.clear();
-    pending = null;
+    parsed.clear();
     activeId = null;
     changed = true;
     out.appendLine(`root: ${root}`);
@@ -342,7 +371,11 @@ async function activate(context) {
             return pushCards();
           }
           if (msg.type === 'create') {
-            if (!pending || typeof msg.text !== 'string' || !msg.text.trim()) return;
+            if (typeof msg.text !== 'string' || !msg.text.trim()) return;
+            if (!pending) {
+              vscode.window.showInformationMessage('Marginalia: the comment could not be added, select the text again. What you typed is kept.');
+              return panel.webview.postMessage({ type: 'restore', id: 'new', text: msg.text });
+            }
             const id = crypto.randomBytes(4).toString('hex');
             const { file, anchor, offset } = pending;
             if (!write('thread', id, { file, ...anchor, offset, text: msg.text.trim() })) return panel.webview.postMessage({ type: 'restore', id: 'new', text: msg.text });
@@ -351,7 +384,10 @@ async function activate(context) {
             focusReply = id;
             return reload();
           }
-          if (!data.has(msg.id)) return;
+          if (!data.has(msg.id)) {
+            if (msg.type === 'reply' && typeof msg.text === 'string' && msg.text.trim()) vscode.window.showInformationMessage(`Marginalia: this comment was deleted, so your reply was not posted. It said: ${msg.text.trim()}`);
+            return;
+          }
           if (msg.type === 'focus') {
             activeId = msg.id;
             return;
@@ -379,16 +415,33 @@ async function activate(context) {
   // lets menus and the keybinding tell whether comments are on for the file in the editor
   const setFileKey = (editor) => vscode.commands.executeCommand('setContext', 'marginalia.enabledFile', !!editor && enabled(editor.document));
 
+  // Stores the current wording of comments in this file whose commented text changed since it was last stored
+  const saveAnchors = (rel) => {
+    let wrote = false;
+    for (const t of data.values()) {
+      const lv = live.get(t.id);
+      if (t.file === rel && lv?.status === 'edited') wrote = write('anchor', t.id, { ...lv.anchor, offset: lv.start }) || wrote;
+    }
+    if (wrote) reload();
+  };
+
   const dirty = new Set();
+  const onDisk = new Set(); // files changed outside VS Code, such as by another program or a git pull
   let timer;
-  const touch = (uri) => {
+  const touch = (uri, fromDisk) => {
     const rel = relOf(uri);
     if (!rel) return;
     dirty.add(rel);
+    if (fromDisk === true) onDisk.add(rel);
     clearTimeout(timer);
     timer = setTimeout(() => {
-      for (const f of dirty) render(f);
+      for (const f of dirty) {
+        render(f);
+        // a file with unsaved changes in VS Code is stored when it is saved
+        if (onDisk.has(f) && !vscode.workspace.textDocuments.some((d) => relOf(d.uri) === f && d.isDirty)) saveAnchors(f);
+      }
       dirty.clear();
+      onDisk.clear();
     }, 300);
   };
 
@@ -403,13 +456,17 @@ async function activate(context) {
     { dispose: () => watchers.forEach((w) => w.dispose()) }
   );
 
-  // the extension used to be latex-comments: copy each old setting to the new name at every scope where the new one is unset
+  // the extension used to be latex-comments: copy each old setting to the new name at every scope where the new one is unset,
+  // once per scope, so a setting the user later resets is not copied back
   const folderUri = vscode.Uri.file(folder);
   const scopes = { globalValue: vscode.ConfigurationTarget.Global, workspaceValue: vscode.ConfigurationTarget.Workspace, workspaceFolderValue: vscode.ConfigurationTarget.WorkspaceFolder };
+  const migrated = (scope) => (scope === 'globalValue' ? context.globalState : context.workspaceState);
+  const pendingScopes = Object.keys(scopes).filter((scope) => !migrated(scope).get('marginalia.migratedSettings'));
   for (const key of ['files', 'root', 'author']) {
     const was = vscode.workspace.getConfiguration('latexComments', folderUri).inspect(key) || {};
     const now = vscode.workspace.getConfiguration('marginalia', folderUri).inspect(key) || {};
-    for (const [scope, target] of Object.entries(scopes)) {
+    for (const scope of pendingScopes) {
+      const target = scopes[scope];
       // in a single-folder window the folder's settings are also the workspace's, so they are copied once
       if (was[scope] === undefined || now[scope] !== undefined || (scope === 'workspaceFolderValue' && was[scope] === was.workspaceValue)) continue;
       await vscode.workspace.getConfiguration('marginalia', folderUri).update(key, was[scope], target).then(
@@ -418,13 +475,15 @@ async function activate(context) {
       );
     }
   }
+  for (const scope of pendingScopes) await migrated(scope).update('marginalia.migratedSettings', true);
 
   // nothing below runs before the root is known
   await configure();
 
   context.subscriptions.push(
     storageView.onDidChangeVisibility((e) => e.visible && refresh()),
-    vscode.window.onDidChangeWindowState((e) => e.focused && refresh()),
+    // files changed while away are redrawn by their watchers, so only the store and git status are checked here
+    vscode.window.onDidChangeWindowState((e) => e.focused && reload().then(checkSharing)),
     vscode.workspace.onDidChangeConfiguration(configure),
     vscode.workspace.onDidGrantWorkspaceTrust(() => configure()),
     vscode.workspace.onDidChangeTextDocument((e) => {
@@ -479,10 +538,19 @@ async function activate(context) {
       // render now so a save right after typing does not store the anchor from before the debounce
       dirty.delete(rel);
       render(rel);
+      saveAnchors(rel);
+    }),
+
+    // comments follow a file or folder renamed or moved in VS Code
+    vscode.workspace.onDidRenameFiles((e) => {
       let wrote = false;
-      for (const t of data.values()) {
-        const lv = live.get(t.id);
-        if (t.file === rel && !t.resolved && lv?.status === 'edited') wrote = write('anchor', t.id, { ...lv.anchor, offset: lv.start }) || wrote;
+      for (const { oldUri, newUri } of e.files) {
+        const from = relOf(oldUri);
+        const to = relOf(newUri);
+        if (!from || !to) continue;
+        for (const t of data.values()) {
+          if (t.file === from || t.file.startsWith(from + '/')) wrote = write('move', t.id, { file: to + t.file.slice(from.length) }) || wrote;
+        }
       }
       if (wrote) reload();
     }),

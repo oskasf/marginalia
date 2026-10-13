@@ -141,6 +141,7 @@ function createFake(dir) {
       onDidOpenTextDocument: hook('open'),
       onDidCloseTextDocument: hook('close'),
       onDidSaveTextDocument: hook('save'),
+      onDidRenameFiles: hook('rename'),
       onDidChangeConfiguration: hook('config'),
       onDidGrantWorkspaceTrust: hook('trust'),
     },
@@ -193,7 +194,10 @@ async function activate({ vscode, seen }) {
   delete require.cache[require.resolve('../extension')];
   const extension = require('../extension');
   Module._load = load;
-  const context = { subscriptions: [], extensionUri: Uri.file(path.join(__dirname, '..')) };
+  const memento = (values) => ({ get: (k) => values[k], update: async (k, v) => void (values[k] = v) });
+  seen.globalState ??= {};
+  seen.workspaceState ??= {};
+  const context = { subscriptions: [], extensionUri: Uri.file(path.join(__dirname, '..')), globalState: memento(seen.globalState), workspaceState: memento(seen.workspaceState) };
   await extension.activate(context);
 
   const posted = [];

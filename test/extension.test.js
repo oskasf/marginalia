@@ -376,6 +376,16 @@ test('settings under the old latexComments name are copied where the new one is 
   assert.deepStrictEqual(again.seen.updates, [], 'nothing is copied a second time');
 });
 
+test('an old setting is not copied back after the new one is reset', async () => {
+  const globalState = {};
+  const workspaceState = {};
+  const scopes = { 'latexComments.author': { globalValue: 'Old Name' } };
+  const first = await setup((seen) => Object.assign(seen, { scopes, globalState, workspaceState }));
+  assert.strictEqual(first.seen.updates.length, 1);
+  const again = await setup((seen) => Object.assign(seen, { scopes, globalState, workspaceState }));
+  assert.deepStrictEqual(again.seen.updates, [], 'marginalia.author is unset again, but the copy already ran');
+});
+
 test('changing the author setting applies to the next comment', async () => {
   const h = await setup();
   h.seen.config.author = 'Renamed';

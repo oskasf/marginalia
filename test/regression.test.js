@@ -194,14 +194,14 @@ test('a comment that cannot be written says so and stays in its card to try agai
   const h = await setup({ files: { 'main.tex': text }, open: ['main.tex'] });
   h.vscode.window.activeTextEditor.selection = new Range(0, 17, 0, 32);
   await h.seen.handlers['marginalia.addOnSelection']();
-  const real = fs.appendFileSync;
-  fs.appendFileSync = () => {
+  const real = fs.writeSync;
+  fs.writeSync = () => {
     throw new Error('EACCES: permission denied');
   };
   try {
     await h.send({ type: 'create', text: 'Cite something.' });
   } finally {
-    fs.appendFileSync = real;
+    fs.writeSync = real;
   }
   assert.match(h.seen.errors[0], /could not save .*EACCES/);
   assert.deepStrictEqual(h.posted.pop(), { type: 'restore', id: 'new', text: 'Cite something.' }, 'the text goes back into the box');
@@ -218,16 +218,16 @@ test('saving a file with several edited comments stores each new wording, even w
   const store = [thread('a1', 'main.tex', v1, ...anchorOn(v1, 'First sentence has some words in it.')), thread('b1', 'main.tex', v1, ...anchorOn(v1, 'Second sentence has other words too.'))];
   const h = await setup({ files: { 'main.tex': v1 }, store, open: ['main.tex'] });
   const doc = h.openDoc('main.tex', v2).document;
-  const real = fs.appendFileSync;
+  const real = fs.writeSync;
   let calls = 0;
-  fs.appendFileSync = (...args) => {
+  fs.writeSync = (...args) => {
     if (calls++ === 0) throw new Error('EBUSY: resource busy');
     return real(...args);
   };
   try {
     h.seen.events.save(doc);
   } finally {
-    fs.appendFileSync = real;
+    fs.writeSync = real;
   }
   assert.strictEqual(h.seen.errors.length, 1);
   assert.deepStrictEqual([h.card('a1').status, h.card('b1').status], ['edited', 'exact']);
@@ -302,4 +302,110 @@ test('a closed Markdown file with comments is redrawn when it changes on disk on
   h.seen.events.filesChange(h.vscode.Uri.file(path.join(h.dir, 'notes.md')));
   t.mock.timers.tick(300);
   assert.strictEqual(h.card('a1').line, 3);
+});
+
+test('typing over the commented text keeps the whole new wording, not the first letters typed', async (t) => {
+  const pre = 'Introduction paragraph with plenty of words before the claim we make here. ';
+  const post = ' After that the paper continues with more text describing the method used.';
+  const v1 = pre + 'Funding raises citations substantially.' + post;
+  const h = await setup({ files: { 'main.tex': v1 }, store: [thread('a1', 'main.tex', v1, ...anchorOn(v1, 'Funding raises citations substantially.'))], open: ['main.tex'] });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let editor;
+  for (const typed of ['G', 'Grants ', 'Grants increase citation counts modestly.']) {
+    editor = h.openDoc('main.tex', pre + typed + post);
+    h.seen.events.change({ document: editor.document, contentChanges: [{}] });
+    t.mock.timers.tick(300);
+  }
+  h.seen.events.save(editor.document);
+  assert.strictEqual(h.card('a1').exact, 'Grants increase citation counts modestly.');
+});
+
+test('deleting the commented text and pressing undo brings back the whole comment', async (t) => {
+  const pre = 'Introduction paragraph with plenty of words before the claim we make here. ';
+  const post = ' After that the paper continues with more text describing the method used.';
+  const quote = 'Funding raises citations substantially.';
+  const v1 = pre + quote + post;
+  const h = await setup({ files: { 'main.tex': v1 }, store: [thread('a1', 'main.tex', v1, ...anchorOn(v1, quote))], open: ['main.tex'] });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let editor;
+  for (const text of [pre + quote.slice(0, 3) + post, pre + post, v1]) {
+    editor = h.openDoc('main.tex', text);
+    h.seen.events.change({ document: editor.document, contentChanges: [{}] });
+    t.mock.timers.tick(300);
+  }
+  h.seen.events.save(editor.document);
+  assert.deepStrictEqual([h.card('a1').status, h.card('a1').exact], ['exact', quote]);
+});
+
+test('a comments file that is a link to another file is neither read nor written', async () => {
+  const text = 'We conclude that targeted grants matter.';
+  const h = await setup({ files: { 'main.tex': text } });
+  const elsewhere = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'mg-elsewhere-')), '.bashrc');
+  fs.writeFileSync(elsewhere, 'export PS1=x\n');
+  fs.rmSync(h.storePath);
+  fs.symlinkSync(elsewhere, h.storePath);
+  await h.seen.handlers['marginalia.reload']();
+  assert.match(h.seen.warnings.pop(), /not a plain file/);
+  h.openDoc('main.tex', text).selection = new Range(0, 17, 0, 32);
+  await h.seen.handlers['marginalia.addOnSelection']();
+  await h.send({ type: 'create', text: 'Cite something.' });
+  assert.strictEqual(fs.readFileSync(elsewhere, 'utf8'), 'export PS1=x\n');
+});
+
+test('a commented file that is not a plain file is skipped instead of read', async () => {
+  const text = 'We conclude that targeted grants matter.';
+  const h = await setup({ store: [thread('a1', 'paper.tex', text, ...anchorOn(text, 'targeted grants'))] });
+  fs.symlinkSync('/dev/zero', path.join(h.dir, 'paper.tex'));
+  await h.seen.handlers['marginalia.reload']();
+  assert.strictEqual(h.card('a1').status, 'detached');
+});
+
+test('a sentence rewritten outside VS Code keeps its comment after a restart', async (t) => {
+  const v1 = 'Opening sentence of the paper here.\nThe estimate is large and significant in every specification.\nClosing words of the paper.';
+  const v2 = v1.replace('large and significant', 'small but precise');
+  const v3 = v2.replace('Opening sentence of the paper here.', 'A completely different first line now.');
+  const h = await setup({ files: { 'main.tex': v1 }, store: [thread('a1', 'main.tex', v1, ...anchorOn(v1, 'The estimate is large and significant in every specification.'))] });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  fs.writeFileSync(path.join(h.dir, 'main.tex'), v2);
+  h.seen.events.filesChange(h.vscode.Uri.file(path.join(h.dir, 'main.tex')));
+  t.mock.timers.tick(300);
+  t.mock.timers.reset();
+  fs.writeFileSync(path.join(h.dir, 'main.tex'), v3);
+  const later = await setup({ files: {}, store: h.stored() });
+  fs.writeFileSync(path.join(later.dir, 'main.tex'), v3);
+  await later.seen.handlers['marginalia.reload']();
+  assert.deepStrictEqual([later.card('a1').status, later.card('a1').exact], ['exact', 'The estimate is small but precise in every specification.']);
+});
+
+test('renaming or moving a commented file in VS Code takes its comments along', async () => {
+  const text = 'We conclude that targeted grants matter.';
+  const h = await setup({ files: { 'main.tex': text, 'sections/a.tex': text }, store: [thread('a1', 'main.tex', text, ...anchorOn(text, 'targeted grants')), thread('b1', 'sections/a.tex', text, ...anchorOn(text, 'targeted grants'))] });
+  fs.renameSync(path.join(h.dir, 'main.tex'), path.join(h.dir, 'intro.tex'));
+  fs.renameSync(path.join(h.dir, 'sections'), path.join(h.dir, 'parts'));
+  const uri = (rel) => h.vscode.Uri.file(path.join(h.dir, rel));
+  h.seen.events.rename({ files: [{ oldUri: uri('main.tex'), newUri: uri('intro.tex') }, { oldUri: uri('sections'), newUri: uri('parts') }] });
+  await h.seen.handlers['marginalia.reload']();
+  assert.deepStrictEqual([h.card('a1').file, h.card('a1').status, h.card('b1').file, h.card('b1').status], ['intro.tex', 'exact', 'parts/a.tex', 'exact']);
+});
+
+test('a resolved comment follows edits like an open one', async () => {
+  const v1 = 'Opening sentence of the paper here.\nThe estimate is large and significant in every specification.\nClosing words.';
+  const v2 = v1.replace('large and significant', 'small but precise');
+  const h = await setup({ files: { 'main.tex': v1 }, store: [thread('a1', 'main.tex', v1, ...anchorOn(v1, 'The estimate is large and significant in every specification.')), { t: 'status', id: 'a1', resolved: true }], open: ['main.tex'] });
+  h.seen.events.save(h.openDoc('main.tex', v2).document);
+  const anchors = h.stored().trim().split('\n').map((l) => JSON.parse(l)).filter((e) => e.t === 'anchor');
+  assert.deepStrictEqual(anchors.map((e) => e.exact), ['The estimate is small but precise in every specification.']);
+});
+
+test('a comment being typed survives a settings change, and one that cannot be added is given back', async () => {
+  const text = 'We conclude that targeted grants matter.';
+  const h = await setup({ files: { 'main.tex': text }, open: ['main.tex'] });
+  h.vscode.window.activeTextEditor.selection = new Range(0, 17, 0, 32);
+  await h.seen.handlers['marginalia.addOnSelection']();
+  await h.vscode.workspace.getConfiguration('marginalia').update('author', 'Someone Else');
+  assert.strictEqual(h.state().compose.exact, 'targeted grants');
+  await h.send({ type: 'cancel' });
+  await h.send({ type: 'create', text: 'Cite something.' });
+  assert.deepStrictEqual(h.posted.pop(), { type: 'restore', id: 'new', text: 'Cite something.' });
+  assert.match(h.seen.infos.pop(), /could not be added/);
 });
