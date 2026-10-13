@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="188 208 860 860" width="1024" height="1024">
+  <defs>
+    <path id="brace" d="M493 302 H440 C385 302 347 340 347 400 V545 C347 600 312 632 262 638 C312 645 347 677 347 732 V877 C347 937 385 975 440 975 H493"/>
+    <mask id="gap">
+      <rect x="188" y="208" width="860" height="860" fill="#fff"/>
+      <path d="M451 302 H440 C385 302 347 340 347 400 V545 C347 600 312 632 262 638 C312 645 347 677 347 732 V877 C347 937 385 975 440 975 H451" fill="none" stroke="#000" stroke-width="135" stroke-linecap="square" stroke-linejoin="bevel"/>
+    </mask>
+  </defs>
+  <g mask="url(#gap)">
+    <path d="M445 270 H810 L997 457 V977 Q997 1007 967 1007 H445 Q415 1007 415 977 V300 Q415 270 445 270 Z" fill="#F7F7FB"/>
+    <path d="M810 270 L997 465 H850 Q810 465 810 425 Z" fill="#B7B9D0"/>
+  </g>
+  <use href="#brace" fill="none" stroke="#5020FB" stroke-width="85" stroke-linejoin="bevel"/>
+  <g fill="#5020FB">
+    <circle cx="469" cy="527" r="31"/>
+    <circle cx="469" cy="660" r="31"/>
+    <circle cx="469" cy="793" r="31"/>
+  </g>
+  <line x1="537" y1="413" x2="537" y2="895" stroke="#6236FC" stroke-width="33" stroke-linecap="round"/>
+  <g stroke="#8486A9" stroke-width="44" stroke-linecap="round">
+    <line x1="609" y1="585" x2="926" y2="585"/>
+    <line x1="609" y1="691" x2="926" y2="691"/>
+    <line x1="609" y1="797" x2="799" y2="797"/>
+  </g>
+</svg>

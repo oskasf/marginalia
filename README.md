@@ -1,3 +1,5 @@
+<img src="images/logo.png" width="128" alt="Marginalia logo">
+
 # Marginalia
 
 Overleaf-style comments for LaTeX in VS Code. Select text in a `.tex` file, leave a comment, and it appears as a card in the margin, with replies and Resolve, just like on Overleaf. Comments live in one plain text file in your project, so they are committed and shared through git with your co-authors, and can be read or written by an LLM.
@@ -18,13 +20,13 @@ Your papers stay in your own editor and repository; nothing is uploaded anywhere
 
 ## The sidebar
 
-Click the Marginalia icon in the left activity bar. The Review section shows every comment as a compact card, grouped by file in the order they appear in the text. Open comments come first and resolved ones are tucked into a "Resolved" group. Click a card to jump to its text. The card for the comment your cursor is in is outlined in yellow and shows a reply box: type, press Enter to send (Shift+Enter for a new line), or press Resolve. Hover a card to get a Delete link; it asks before deleting. The number on the icon is how many comments are open.
+Click the Marginalia icon in the left activity bar. The Review section shows every comment as a compact card, grouped by file in the order they appear in the text. Open comments come first and resolved ones are tucked into a "Resolved" group. Click a card to jump to its text. The card for the comment your cursor is in is outlined in purple and shows a reply box: type, press Enter to send (Shift+Enter for a new line), or press Resolve. Hover a card to get a Delete link; it asks before deleting. The number on the icon is how many comments are open.
 
 The plain "Comments" list underneath is the same information as a tree, collapsed by default.
 
 At the bottom, a "Comments file" section shows where your comments are kept. Click the `.comments.jsonl` row to open the file, or the Folder row to show it in Finder or Explorer. A row tells you whether the file stays on your computer or is shared through git, and another shows the name your comments are posted under. Click that one to change it.
 
-To keep the cards beside your text, drag the Marginalia icon from the left activity bar to the right edge of the window. The yellow ticks on the scrollbar show where the open comments are. The cards use the same colours for the quote bar and the outline of the active card. Both colours can be changed under `workbench.colorCustomizations` as `marginalia.highlightBackground` and `marginalia.overviewRuler`.
+To keep the cards beside your text, drag the Marginalia icon from the left activity bar to the right edge of the window. The purple ticks on the scrollbar show where the open comments are. The cards use the same colours for the quote bar and the outline of the active card. Both colours can be changed under `workbench.colorCustomizations` as `marginalia.highlightBackground` and `marginalia.overviewRuler`.
 
 If something does not work, open View > Output and choose "Marginalia" from the dropdown. Errors are printed there.
 

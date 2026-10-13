@@ -110,20 +110,20 @@
         "id": "marginalia.highlightBackground",
         "description": "Background of text that has an open comment.",
         "defaults": {
-          "dark": "#ffc80038",
-          "light": "#ffc80038",
-          "highContrast": "#ffc80038",
-          "highContrastLight": "#ffc80038"
+          "dark": "#7B5CFF47",
+          "light": "#5020FB24",
+          "highContrast": "#7B5CFF47",
+          "highContrastLight": "#5020FB24"
         }
       },
       {
         "id": "marginalia.overviewRuler",
         "description": "Scrollbar mark for text that has an open comment.",
         "defaults": {
-          "dark": "#ffc800cc",
-          "light": "#ffc800cc",
-          "highContrast": "#ffc800cc",
-          "highContrastLight": "#ffc800cc"
+          "dark": "#8B6CFFE6",
+          "light": "#5020FBE6",
+          "highContrast": "#8B6CFFE6",
+          "highContrastLight": "#5020FBE6"
         }
       }
     ],
