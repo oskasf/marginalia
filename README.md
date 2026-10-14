@@ -53,6 +53,15 @@ Comments are on for `.tex` files by default. To use them in another kind of file
 
 To change the colours, use `marginalia.highlightBackground` and `marginalia.overviewRuler` under `workbench.colorCustomizations`. If something isn't working, open View > Output and choose "Marginalia".
 
+## Using with Claude
+
+Two [Claude Code](https://claude.com/claude-code) skills in [`skills/`](skills) let Claude work with your comments:
+
+- **marginalia-feedback**: ask "give me feedback on intro.tex" and Claude leaves its feedback as comments on the exact sentences, without touching the document.
+- **marginalia-address**: ask "address the comments in intro.tex" and Claude makes the requested edits and replies in each thread saying what it changed. Resolving stays with you unless you ask.
+
+To install them, copy both folders into `~/.claude/skills/` (or `.claude/skills/` in your project). Claude only ever adds lines to `.comments.jsonl`, through a small Python helper built into each skill, and its comments are signed "Claude".
+
 ## File format
 
 Each line of `.comments.jsonl` is one JSON object. People and LLMs can add comments by writing a single `thread` line:
@@ -68,7 +77,7 @@ Each line of `.comments.jsonl` is one JSON object. People and LLMs can add comme
 
 ## Development
 
-Press F5 in this folder to try changes in a second VS Code window. Run `npm test` for the tests, and `npm run package` to build a `.vsix` you can install locally.
+Press F5 in this folder to try changes in a second VS Code window. Run `npm test` for the tests (after changing `skills/marginalia.py`, run `npm run skills` to copy it into both skills), and `npm run package` to build a `.vsix` you can install locally.
 
 ## License
 

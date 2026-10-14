@@ -53,7 +53,8 @@
     "onLanguage:tex"
   ],
   "scripts": {
-    "test": "node --test test/anchor.test.js test/store.test.js test/extension.test.js test/regression.test.js",
+    "skills": "node skills/build.js",
+    "test": "node --test test/anchor.test.js test/store.test.js test/extension.test.js test/regression.test.js test/skills.test.js",
     "package": "npx @vscode/vsce package"
   },
   "contributes": {
