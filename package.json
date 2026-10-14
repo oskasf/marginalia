@@ -1,0 +1,253 @@
+{
+  "name": "marginalia-comments",
+  "displayName": "Marginalia: Overleaf-style comments for LaTeX",
+  "description": "Comment threads in the margin of your .tex files, stored in the repo so co-authors see them. Works with Markdown, code or any text file too.",
+  "keywords": [
+    "latex",
+    "tex",
+    "overleaf",
+    "comments",
+    "review",
+    "annotations",
+    "academic",
+    "markdown"
+  ],
+  "version": "0.1.0",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#1E1550",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oskasf/marginalia.git"
+  },
+  "bugs": {
+    "url": "https://github.com/oskasf/marginalia/issues"
+  },
+  "homepage": "https://github.com/oskasf/marginalia#readme",
+  "publisher": "OskaFentem",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "Education"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In an untrusted folder git is not run, so the comments root is the opened folder (or the marginalia.root setting) and the author comes from settings."
+    },
+    "virtualWorkspaces": false
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "workspaceContains:**/*.tex",
+    "workspaceContains:**/.comments.jsonl",
+    "onLanguage:latex",
+    "onLanguage:tex"
+  ],
+  "scripts": {
+    "test": "node --test test/anchor.test.js test/store.test.js test/extension.test.js test/regression.test.js",
+    "package": "npx @vscode/vsce package"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "marginalia.addOnSelection",
+        "title": "Add comment on selection",
+        "category": "Marginalia"
+      },
+      {
+        "command": "marginalia.enableFileType",
+        "title": "Enable comments for this file type",
+        "category": "Marginalia"
+      },
+      {
+        "command": "marginalia.reload",
+        "title": "Reload comments",
+        "category": "Marginalia",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "marginalia.reveal",
+        "title": "Open comment",
+        "category": "Marginalia"
+      },
+      {
+        "command": "marginalia.reply",
+        "title": "Reply to comment",
+        "category": "Marginalia"
+      },
+      {
+        "command": "marginalia.resolve",
+        "title": "Resolve",
+        "category": "Marginalia",
+        "icon": "$(check)"
+      },
+      {
+        "command": "marginalia.reopen",
+        "title": "Reopen",
+        "category": "Marginalia",
+        "icon": "$(issue-reopened)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "marginalia.addOnSelection",
+        "key": "ctrl+k ctrl+m",
+        "mac": "cmd+k cmd+m",
+        "when": "editorTextFocus && marginalia.enabledFile"
+      }
+    ],
+    "colors": [
+      {
+        "id": "marginalia.highlightBackground",
+        "description": "Background of text that has an open comment.",
+        "defaults": {
+          "dark": "#7B5CFF47",
+          "light": "#5020FB24",
+          "highContrast": "#7B5CFF47",
+          "highContrastLight": "#5020FB24"
+        }
+      },
+      {
+        "id": "marginalia.overviewRuler",
+        "description": "Scrollbar mark for text that has an open comment.",
+        "defaults": {
+          "dark": "#8B6CFFE6",
+          "light": "#5020FBE6",
+          "highContrast": "#8B6CFFE6",
+          "highContrastLight": "#5020FBE6"
+        }
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "marginaliaSidebar",
+          "title": "Marginalia",
+          "icon": "media/comments.svg"
+        }
+      ]
+    },
+    "views": {
+      "marginaliaSidebar": [
+        {
+          "type": "webview",
+          "id": "marginalia.cards",
+          "name": "Review"
+        },
+        {
+          "id": "marginalia.threads",
+          "name": "Comments",
+          "visibility": "collapsed"
+        },
+        {
+          "id": "marginalia.storage",
+          "name": "Comments file"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "marginalia.threads",
+        "contents": "No comments yet.\nSelect text in a .tex file, right-click and choose Add comment on selection, or press Ctrl+K then Ctrl+M (Cmd+K then Cmd+M on a Mac).\nTo comment on other files, such as Markdown, right-click in one and choose Enable comments for this file type."
+      },
+      {
+        "view": "marginalia.storage",
+        "contents": "Open a folder on this computer to use comments.\n[Open Folder](command:workbench.action.files.openFolder)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "marginalia.reload",
+          "group": "navigation",
+          "when": "view == marginalia.threads || view == marginalia.cards"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "marginalia.resolve",
+          "group": "inline",
+          "when": "view == marginalia.threads && viewItem == open"
+        },
+        {
+          "command": "marginalia.reopen",
+          "group": "inline",
+          "when": "view == marginalia.threads && viewItem == resolved"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "marginalia.addOnSelection",
+          "when": "marginalia.enabledFile"
+        },
+        {
+          "command": "marginalia.enableFileType",
+          "when": "resourceScheme == file && !marginalia.enabledFile"
+        },
+        {
+          "command": "marginalia.reveal",
+          "when": "false"
+        },
+        {
+          "command": "marginalia.reply",
+          "when": "false"
+        },
+        {
+          "command": "marginalia.resolve",
+          "when": "false"
+        },
+        {
+          "command": "marginalia.reopen",
+          "when": "false"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "marginalia.addOnSelection",
+          "when": "marginalia.enabledFile",
+          "group": "navigation"
+        },
+        {
+          "command": "marginalia.enableFileType",
+          "when": "resourceScheme == file && !marginalia.enabledFile",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Marginalia",
+      "properties": {
+        "marginalia.files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/*.tex"
+          ],
+          "scope": "resource",
+          "description": "Glob patterns, relative to the comments root, of the files you can comment on. \"Enable comments for this file type\" in the editor's right-click menu adds one for you."
+        },
+        "marginalia.root": {
+          "type": "string",
+          "default": "",
+          "description": "Folder that holds .comments.jsonl and that comment file paths are relative to. Empty means the git root of the workspace folder, or the workspace folder if there is none."
+        },
+        "marginalia.author": {
+          "type": "string",
+          "default": "",
+          "description": "Name shown on your comments. Empty means git config user.name."
+        }
+      }
+    }
+  }
+}
