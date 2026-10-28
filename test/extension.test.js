@@ -348,6 +348,63 @@ test('deleted text leaves a detached comment', async (t) => {
   assert.strictEqual(item.iconPath.id, 'warning');
 });
 
+// Applies edits to the open main.tex the way VS Code reports them: offsets into the text before the edit, the last one first
+const typer = (h, t) => (changes) => {
+  let text = h.editor.document.getText();
+  for (const c of changes) text = text.slice(0, c.rangeOffset) + c.text + text.slice(c.rangeOffset + c.rangeLength);
+  h.editor.document = h.makeDoc(text);
+  h.vscode.workspace.textDocuments[0] = h.editor.document;
+  h.seen.events.change({ document: h.editor.document, contentChanges: changes });
+  t.mock.timers.tick(300);
+  return text;
+};
+const replace = (h, find, text) => ({ rangeOffset: h.editor.document.getText().indexOf(find), rangeLength: find.length, text });
+
+test('a comment stays on its text when the text and the words around it are rewritten at once', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = await setup();
+  const rewritten = 'The headline result is that treated papers are cited far more often.';
+  const text = typer(h, t)([replace(h, sentence, rewritten), replace(h, 'We study how funding shapes research.', 'This paper asks how money steers science.')]);
+  assert.strictEqual(h.card('a1').status, 'edited');
+  assert.strictEqual(sliceByRange(text, h.editor.marks[0]), rewritten);
+  await h.send({ type: 'reply', id: 'a1', text: 'Better.' });
+  assert.strictEqual(h.card('a1').status, 'edited', 'and replying does not detach it');
+  assert.strictEqual(sliceByRange(text, h.editor.marks[0]), rewritten);
+  h.seen.events.save(h.editor.document);
+  assert.strictEqual(h.storedEvents().filter((e) => e.t === 'anchor').pop().exact, rewritten);
+});
+
+test('text typed just before or after a comment is not added to it, and text typed inside is', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = await setup();
+  const edit = typer(h, t);
+  const at = (find, after = 0) => h.editor.document.getText().indexOf(find) + after;
+  edit([{ rangeOffset: at(sentence, sentence.length), rangeLength: 0, text: ' More.' }]);
+  edit([{ rangeOffset: at(sentence), rangeLength: 0, text: 'First. ' }]);
+  const text = edit([{ rangeOffset: at('large'), rangeLength: 0, text: 'very ' }]);
+  assert.strictEqual(sliceByRange(text, h.editor.marks[0]), sentence.replace('large', 'very large'));
+});
+
+test('a comment whose text is deleted comes back when new text is typed in its place', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = await setup();
+  const edit = typer(h, t);
+  const offset = h.editor.document.getText().indexOf(sentence);
+  edit([replace(h, sentence, '')]);
+  assert.strictEqual(h.card('a1').status, 'detached');
+  const text = edit([{ rangeOffset: offset, rangeLength: 0, text: 'Citations rise.' }]);
+  assert.strictEqual(h.card('a1').status, 'edited');
+  assert.strictEqual(sliceByRange(text, h.editor.marks[0]), 'Citations rise.');
+});
+
+test('a comment is found by its text again when the file reloads in one piece, as after a git pull', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = await setup();
+  const pulled = 'A new first line.\n' + original;
+  const text = typer(h, t)([{ rangeOffset: 0, rangeLength: original.length, text: pulled }]);
+  assert.strictEqual(sliceByRange(text, h.editor.marks[0]), sentence);
+});
+
 test('a write of our own is not reloaded twice when the file watcher reports it', async () => {
   const h = await setup();
   await h.send({ type: 'reply', id: 'a1', text: 'once' });

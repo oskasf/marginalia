@@ -168,8 +168,6 @@ async function activate(context) {
 
   const parsed = new Map(); // file -> its text with the squashed copy and line starts, reused while the text is unchanged
   const readFile = (rel) => {
-    const open = vscode.workspace.textDocuments.find((d) => relOf(d.uri) === rel);
-    if (open) return open.getText();
     try {
       const full = path.join(root, rel);
       const info = fs.statSync(full);
@@ -186,10 +184,12 @@ async function activate(context) {
       for (const t of data.values()) {
         if (onlyFile && t.file !== onlyFile) continue;
         if (!files.has(t.file)) {
-          const text = readFile(t.file);
+          const doc = vscode.workspace.textDocuments.find((d) => relOf(d.uri) === t.file);
+          const text = doc ? doc.getText() : readFile(t.file);
           let entry = parsed.get(t.file);
           if (text === null) entry = null;
           else if (entry?.text !== text) entry = { text, sq: squash(text), starts: lineStarts(text) };
+          if (entry) Object.assign(entry, { open: !!doc, version: doc?.version });
           if (entry) parsed.set(t.file, entry);
           else parsed.delete(t.file);
           files.set(t.file, entry);
@@ -197,8 +197,10 @@ async function activate(context) {
         const file = files.get(t.file);
         const prev = live.get(t.id);
         const hint = prev?.start ?? t.offset;
+        // in an open file the comment is moved along with each edit (see follow), so its text is only searched for when that is not known
+        const kept = file?.open && prev?.tracked && prev.version === file.version && prev.size === file.text.length ? prev : null;
         // when the live anchor is lost, the stored one may still fit, e.g. after a co-author's re-anchor arrives with git pull
-        const found = file && (findAnchor(file.sq, prev?.anchor ?? t, hint) || (prev && findAnchor(file.sq, t, hint)));
+        const found = kept?.end > kept?.start ? kept : file && (findAnchor(file.sq, prev?.anchor ?? t, hint) || (prev && findAnchor(file.sq, t, hint)));
 
         let lv;
         if (found) {
@@ -207,10 +209,11 @@ async function activate(context) {
           const anchor = makeAnchor(file.text, found.start, found.end);
           // edited until the new wording is saved to the store
           const status = squash(anchor.exact).s === squash(t.exact).s ? 'exact' : 'edited';
-          lv = { start: found.start, line: a.line, range: new vscode.Range(a.line, a.character, b.line, b.character), anchor, status };
+          lv = { start: found.start, end: found.end, tracked: file.open, version: file.version, size: file.text.length, line: a.line, range: new vscode.Range(a.line, a.character, b.line, b.character), anchor, status };
           if (!t.resolved) marks.set(t.file, [...(marks.get(t.file) || []), lv.range]);
         } else {
-          lv = { start: hint, line: -1, range: undefined, anchor: prev?.anchor ?? t, status: 'detached' };
+          // a comment whose text was deleted keeps its place, so text typed or undone there brings it back
+          lv = { start: hint, end: hint, tracked: !!kept, version: kept?.version, size: kept?.size, line: -1, range: undefined, anchor: prev?.anchor ?? t, status: 'detached' };
         }
         live.set(t.id, lv);
 
@@ -425,6 +428,43 @@ async function activate(context) {
     if (wrote) reload();
   };
 
+  // Moves the comments in an open file along with an edit, the way Overleaf does, so rewording their text or the text around them keeps them on it.
+  // Text typed where the commented text was edited becomes part of the comment, and text typed just before or after it does not
+  const follow = (rel, changes, version) => {
+    for (const t of data.values()) {
+      const lv = live.get(t.id);
+      if (t.file !== rel || !lv?.tracked) continue;
+      let { start, end, size } = lv;
+      // the changes are counted from the text before the edit, so the last one is applied first
+      for (const c of [...changes].sort((x, y) => y.rangeOffset - x.rangeOffset)) {
+        const o = c.rangeOffset;
+        const l = c.rangeLength;
+        const n = typeof c.text === 'string' ? c.text.length : NaN;
+        // an edit around the whole comment, such as the file reloading after a git pull, is left to the text search
+        if (!Number.isInteger(o) || !Number.isInteger(l) || isNaN(n) || (o <= start && o + l >= end && l > end - start)) {
+          lv.tracked = false;
+          break;
+        }
+        size += n - l;
+        if (start === end && l === 0 && o === start) {
+          end += n;
+          continue;
+        }
+        if (start >= o + l) start += n - l;
+        else if (start >= o) start = o;
+        if (end > o + l) end += n - l;
+        else if (end > o) end = o + n;
+      }
+      if (lv.tracked) Object.assign(lv, { start, end, size, version });
+    }
+  };
+
+  // what is open may differ from the file on disk, so its comments are found again by their text
+  const untrack = (doc) => {
+    for (const t of data.values()) if (t.file === relOf(doc.uri) && live.has(t.id)) live.get(t.id).tracked = false;
+    touch(doc.uri);
+  };
+
   const dirty = new Set();
   const onDisk = new Set(); // files changed outside VS Code, such as by another program or a git pull
   let timer;
@@ -487,10 +527,12 @@ async function activate(context) {
     vscode.workspace.onDidChangeConfiguration(configure),
     vscode.workspace.onDidGrantWorkspaceTrust(() => configure()),
     vscode.workspace.onDidChangeTextDocument((e) => {
-      if (e.contentChanges.length) touch(e.document.uri);
+      if (!e.contentChanges.length) return;
+      follow(relOf(e.document.uri), e.contentChanges, e.document.version);
+      touch(e.document.uri);
     }),
-    vscode.workspace.onDidOpenTextDocument((d) => touch(d.uri)),
-    vscode.workspace.onDidCloseTextDocument((d) => touch(d.uri)),
+    vscode.workspace.onDidOpenTextDocument(untrack),
+    vscode.workspace.onDidCloseTextDocument(untrack),
     vscode.window.onDidChangeVisibleTextEditors((editors) => editors.forEach((e) => touch(e.document.uri))),
     vscode.window.onDidChangeActiveTextEditor(setFileKey),
     vscode.languages.registerHoverProvider(
