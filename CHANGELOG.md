@@ -2,7 +2,7 @@
 
 ## 0.1.2
 
-- Resolve and Delete in the Review panel now always respond to a click. Before, a click could be lost when the panel jumped back to a reply box as you clicked into it from the editor, or when the cards were redrawn while the mouse button was held down. The buttons also have a slightly larger click area.
+- Resolve and Delete in the Review panel now always respond to a click. Before, a click could be lost when the panel jumped back to a reply box as you clicked into it from the editor, or when the cards were redrawn while the mouse button was held down. The buttons also have a larger click area, so a click just beside the word no longer opens the comment instead.
 
 ## 0.1.1
 

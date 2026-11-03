@@ -61,8 +61,8 @@ body {
 }
 
 button.link {
-  margin: -3px -2px;
-  padding: 3px 4px;
+  margin: -5px -3px;
+  padding: 5px 6px;
   font: inherit;
   font-size: 11px;
   color: var(--vscode-textLink-foreground);
