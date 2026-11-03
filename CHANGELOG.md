@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Resolve and Delete in the Review panel now always respond to a click. Before, a click could be lost when the panel jumped back to a reply box as you clicked into it from the editor, or when the cards were redrawn while the mouse button was held down. The buttons also have a slightly larger click area.
+
 ## 0.1.1
 
 - Comments in an open file now move with each edit, as on Overleaf, so they stay on their text when you rewrite it together with the words around it, or delete it and type something new in its place. Before, such edits could leave a comment detached, which often showed up after replying to it.

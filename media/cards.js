@@ -7,6 +7,7 @@ let composeKey = saved.composeKey || null;
 let resolvedOpen = saved.resolvedOpen || false;
 let composing = false;
 let deferred = false;
+let pressed = false; // a mouse button is down in the panel, so redrawing now would swallow the click
 let lastBox = null; // the reply box that last had focus, to give it back when VS Code refocuses the panel
 const save = () => vscode.setState({ drafts, composeKey, resolvedOpen });
 
@@ -231,7 +232,7 @@ window.addEventListener('message', (event) => {
   const msg = event.data;
   if (msg.type === 'state') {
     state = msg;
-    if (composing) deferred = true;
+    if (composing || pressed) deferred = true;
     else draw();
   }
   if (msg.type === 'active') {
@@ -245,11 +246,21 @@ window.addEventListener('message', (event) => {
   }
 });
 
+window.addEventListener('pointerdown', () => (pressed = true), true);
+// redraw only after the click has been handled, which happens just after the button is released
+const release = () => setTimeout(() => {
+  pressed = false;
+  if (deferred && !composing) draw();
+  deferred = false;
+});
+window.addEventListener('pointerup', release, true);
+window.addEventListener('pointercancel', release, true);
+
 // VS Code may move focus out of the webview and back while opening it, which leaves nothing focused
 window.addEventListener('focus', () => {
-  if (document.activeElement && document.activeElement !== document.body) return;
+  if (pressed || (document.activeElement && document.activeElement !== document.body)) return;
   const box = lastBox && root.querySelector(`textarea[data-reply-for="${CSS.escape(lastBox)}"]`);
-  if (box) box.focus();
+  if (box) box.focus({ preventScroll: true });
 });
 
 vscode.postMessage({ type: 'ready' });
