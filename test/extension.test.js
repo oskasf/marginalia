@@ -255,6 +255,25 @@ test('adding a comment opens a card for the selection, or the line when nothing 
   assert.strictEqual(h.lastState().compose, null);
 });
 
+test('the Review panel is told which file is open, ignoring files that cannot have comments', async () => {
+  const h = await setup();
+  assert.strictEqual(h.lastState().file, 'main.tex');
+  const fileMsgs = () => h.posted.filter((m) => m.type === 'file').map((m) => m.file);
+  const open = (name) => {
+    const doc = { uri: { scheme: 'file', fsPath: path.join(h.dir, name) }, languageId: 'plaintext' };
+    h.seen.events.activeEditor({ document: doc, selection: new Range(0, 0, 0, 0) });
+  };
+  open('sections/intro.tex');
+  h.seen.events.activeEditor(undefined);
+  open('settings.json');
+  open('/elsewhere');
+  assert.deepStrictEqual(fileMsgs(), ['sections/intro.tex'], 'a file that is not commentable, or no editor, keeps the last file');
+  open('main.tex');
+  assert.deepStrictEqual(fileMsgs(), ['sections/intro.tex', 'main.tex']);
+  await h.send({ type: 'ready' });
+  assert.strictEqual(h.lastState().file, 'main.tex');
+});
+
 test('a new comment is saved, shown, and removed again after confirming Delete', async () => {
   const h = await setup();
   h.editor.selection = new Range(0, 13, 0, 27);

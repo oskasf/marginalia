@@ -177,3 +177,44 @@ button.link:hover {
   margin: 12px 2px;
   opacity: 0.7;
 }
+
+.scope {
+  display: flex;
+  margin: 2px 0 6px;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.35)));
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.scope button {
+  flex: 1;
+  padding: 3px 6px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--vscode-foreground);
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.scope button + button {
+  border-left: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.35)));
+}
+
+.scope button.on {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background, var(--vscode-focusBorder));
+  opacity: 1;
+}
+
+.scope button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+button.link.more {
+  display: block;
+  margin: 10px 0 0;
+  padding: 2px;
+}
