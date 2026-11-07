@@ -17,7 +17,7 @@ Select some text, leave a comment, and it shows up as a card in the margin. Co-a
 
 1. Install Marginalia and open your paper's folder.
 2. Select some text in a `.tex` file, then right-click and choose **Add comment on selection** (or press Ctrl+K Ctrl+M, Cmd+K Cmd+M on a Mac). Type your comment and press Enter.
-3. Commented text is highlighted. Hover over it to read, reply or resolve. Click the Marginalia icon in the activity bar to see every comment as a card.
+3. Commented text is highlighted. Hover over it to read, reply or resolve. Click the Marginalia icon in the activity bar to see the comments as cards. The cards show the file you're working on; switch to **All files** at the top to see every comment.
 
 Tip: drag the Marginalia icon to the right-hand side of the window to keep the cards next to your text.
 

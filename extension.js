@@ -71,6 +71,7 @@ async function activate(context) {
   let activeId = null; // the open comment the cursor is inside
   let pending = null; // a new comment being typed in the Review panel: { file, line, anchor, offset }
   let focusReply = null; // id of a card whose reply box the panel should focus the next time it is updated
+  let currentFile = null; // the commentable file last focused in the editor, whose comments the Review panel shows first
   const pushCards = () => {
     if (!cardsPanel || !cardsReady) return;
     const cards = [...data.values()].map((t) => {
@@ -78,7 +79,7 @@ async function activate(context) {
       return { id: t.id, file: t.file, line: lv.line, status: lv.status, resolved: t.resolved, exact: t.exact, messages: t.messages };
     });
     const compose = pending ? { file: pending.file, line: pending.line, exact: pending.anchor.exact } : null;
-    cardsPanel.webview.postMessage({ type: 'state', cards, activeId, compose, focus: focusReply });
+    cardsPanel.webview.postMessage({ type: 'state', cards, activeId, compose, focus: focusReply, file: currentFile });
     focusReply = null;
   };
 
@@ -301,7 +302,10 @@ async function activate(context) {
     const top = path.resolve(folder, config.get('root') || (await git(folder, 'rev-parse', '--show-cdup')) || '.');
     const name = config.get('author') || (await git(top, 'config', 'user.name')) || os.userInfo().username;
     if (run !== runs) return; // a newer run has started
-    if (top !== root) pending = null; // a comment being typed survives other setting changes
+    if (top !== root) {
+      pending = null; // a comment being typed survives other setting changes
+      currentFile = null;
+    }
     root = top;
     storePath = path.join(root, '.comments.jsonl');
     author = name;
@@ -329,6 +333,7 @@ async function activate(context) {
     out.appendLine(`root: ${root}`);
     out.appendLine(`author: ${author}`);
     await reload(true);
+    if (!currentFile) setFileKey(vscode.window.activeTextEditor); // now that the comments are known
     out.appendLine(`threads loaded: ${data.size}`);
   }
 
@@ -415,8 +420,15 @@ async function activate(context) {
     },
   };
 
-  // lets menus and the keybinding tell whether comments are on for the file in the editor
-  const setFileKey = (editor) => vscode.commands.executeCommand('setContext', 'marginalia.enabledFile', !!editor && enabled(editor.document));
+  // lets menus and the keybinding tell whether comments are on for the file in the editor, and tells the Review panel which file that is
+  const setFileKey = (editor) => {
+    vscode.commands.executeCommand('setContext', 'marginalia.enabledFile', !!editor && enabled(editor.document));
+    const rel = editor && relOf(editor.document.uri);
+    // a glance at a file that cannot have comments, such as a settings file, leaves the panel on the last one
+    if (!rel || rel === currentFile || !(enabled(editor.document) || [...data.values()].some((t) => t.file === rel))) return;
+    currentFile = rel;
+    if (cardsPanel && cardsReady) cardsPanel.webview.postMessage({ type: 'file', file: rel });
+  };
 
   // Stores the current wording of comments in this file whose commented text changed since it was last stored
   const saveAnchors = (rel) => {

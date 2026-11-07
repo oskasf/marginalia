@@ -5,11 +5,12 @@ const saved = vscode.getState() || {};
 const drafts = saved.drafts || {};
 let composeKey = saved.composeKey || null;
 let resolvedOpen = saved.resolvedOpen || false;
+let scope = saved.scope || 'file'; // 'file' shows only the comments on the file open in the editor, 'all' shows every file
 let composing = false;
 let deferred = false;
 let pressed = false; // a mouse button is down in the panel, so redrawing now would swallow the click
 let lastBox = null; // the reply box that last had focus, to give it back when VS Code refocuses the panel
-const save = () => vscode.setState({ drafts, composeKey, resolvedOpen });
+const save = () => vscode.setState({ drafts, composeKey, resolvedOpen, scope });
 
 const el = (tag, className, text) => {
   const node = document.createElement(tag);
@@ -179,7 +180,39 @@ function draw() {
     root.append(el('div', 'empty', `No comments yet. Select text in a .tex file and press ${/Mac/.test(navigator.platform) ? 'Cmd+K Cmd+M' : 'Ctrl+K Ctrl+M'}, or right-click and choose "Add comment on selection". For other files, such as Markdown, right-click in one and choose "Enable comments for this file type".`));
   }
 
-  const cards = [...state.cards].sort((a, b) => a.file.localeCompare(b.file) || (a.line < 0) - (b.line < 0) || a.line - b.line);
+  const here = state.file;
+  const all = scope === 'all' || !here;
+  // the open file's comments come first, then the other files in name order
+  const sorted = [...state.cards].sort((a, b) => (b.file === here) - (a.file === here) || a.file.localeCompare(b.file) || (a.line < 0) - (b.line < 0) || a.line - b.line);
+  const cards = all ? sorted : sorted.filter((c) => c.file === here || c.id === state.focus);
+  const openHere = state.cards.filter((c) => !c.resolved && c.file === here).length;
+  const openElsewhere = state.cards.filter((c) => !c.resolved && c.file !== here).length;
+  const pick = (value) => {
+    scope = value;
+    save();
+    draw();
+  };
+  if (here && state.cards.some((c) => c.file !== here)) {
+    const bar = el('div', 'scope');
+    bar.setAttribute('role', 'group');
+    bar.setAttribute('aria-label', 'Which comments to show');
+    for (const [value, label, title] of [
+      ['file', `This file (${openHere})`, 'Show only the comments on ' + here],
+      ['all', `All files (${openHere + openElsewhere})`, 'Show the comments on every file'],
+    ]) {
+      const button = el('button', value === scope ? 'on' : '', label);
+      button.title = title;
+      button.dataset.focus = 'scope-' + value;
+      button.setAttribute('aria-pressed', String(value === scope));
+      button.addEventListener('click', () => pick(value));
+      bar.append(button);
+    }
+    root.append(bar);
+  }
+  if (!all && state.cards.length && !cards.some((c) => !c.resolved)) {
+    root.append(el('div', 'file', here), el('div', 'empty', 'No open comments on this file.'));
+  }
+
   let lastFile = null;
   for (const c of cards.filter((x) => !x.resolved)) {
     if (c.file !== lastFile) {
@@ -200,6 +233,14 @@ function draw() {
     group.append(el('summary', '', `Resolved (${done.length})`));
     for (const c of done) group.append(makeCard(c));
     root.append(group);
+  }
+
+  if (!all && openElsewhere) {
+    const more = el('button', 'link more', `${openElsewhere} open comment${openElsewhere === 1 ? '' : 's'} on other files`);
+    more.title = 'Show the comments on every file';
+    more.dataset.focus = 'more';
+    more.addEventListener('click', () => pick('all'));
+    root.append(more);
   }
 
   for (const box of root.querySelectorAll('textarea')) {
@@ -224,6 +265,8 @@ function draw() {
     const card = same || cards[Math.min(oldIndex, cards.length - 1)];
     const next = card ? card.querySelector(`[data-focus="${focusKind}"]`) : root.querySelector('summary');
     if (next) next.focus();
+  } else if (focusKind === 'more' || focusKind?.startsWith('scope-')) {
+    root.querySelector(`[data-focus="scope-${scope}"]`)?.focus();
   }
   markActive(false);
 }
@@ -232,6 +275,11 @@ window.addEventListener('message', (event) => {
   const msg = event.data;
   if (msg.type === 'state') {
     state = msg;
+    if (composing || pressed) deferred = true;
+    else draw();
+  }
+  if (msg.type === 'file') {
+    state.file = msg.file;
     if (composing || pressed) deferred = true;
     else draw();
   }
