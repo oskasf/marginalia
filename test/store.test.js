@@ -89,3 +89,17 @@ test('append adds a missing newline before the new line', () => {
   assert.strictEqual(lines.length, 2);
   assert.strictEqual(parse(lines.join('\n')).get('h1').messages.length, 1);
 });
+
+test('reads importance from a new thread and from later changes, ignoring unknown levels', () => {
+  const threads = parse(
+    [
+      '{"t":"thread","id":"a1","file":"x.tex","exact":"one","text":"hi","importance":"high"}',
+      '{"t":"thread","id":"b2","file":"x.tex","exact":"two","text":"hi"}',
+      '{"t":"thread","id":"c3","file":"x.tex","exact":"three","text":"hi","importance":"urgent"}',
+      '{"t":"importance","id":"b2","level":"low"}',
+      '{"t":"importance","id":"a1","level":""}',
+      '{"t":"importance","id":"nope","level":"high"}',
+    ].join('\n')
+  );
+  assert.deepStrictEqual([...threads.values()].map((t) => [t.id, t.importance]), [['a1', ''], ['b2', 'low'], ['c3', '']]);
+});

@@ -5,7 +5,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { promisify } = require('util');
 const { execFile } = require('child_process');
-const { parse, read, append } = require('./store');
+const { parse, read, append, LEVELS } = require('./store');
 const { squash, makeAnchor, findAnchor, lineStarts, toPos } = require('./anchor');
 
 const exec = promisify(execFile);
@@ -35,11 +35,17 @@ async function activate(context) {
   let selector = []; // one filter per glob in the marginalia.files setting
 
   const out = vscode.window.createOutputChannel('Marginalia');
-  const highlight = vscode.window.createTextEditorDecorationType({
-    backgroundColor: new vscode.ThemeColor('marginalia.highlightBackground'),
-    overviewRulerColor: new vscode.ThemeColor('marginalia.overviewRuler'),
-    overviewRulerLane: vscode.OverviewRulerLane.Right,
-  });
+  // one highlight style per importance, '' being a normal comment
+  const styles = new Map(
+    ['', ...LEVELS].map((level) => {
+      const name = level ? level + 'Importance' : 'highlight';
+      return [level, vscode.window.createTextEditorDecorationType({
+        backgroundColor: new vscode.ThemeColor(`marginalia.${name}Background`),
+        overviewRulerColor: new vscode.ThemeColor(level ? `marginalia.${name}OverviewRuler` : 'marginalia.overviewRuler'),
+        overviewRulerLane: vscode.OverviewRulerLane.Right,
+      })];
+    })
+  );
 
   let data = new Map(); // id -> thread as read from .comments.jsonl
   let lastText; // the text data was parsed from, null when the file does not exist
@@ -65,6 +71,12 @@ async function activate(context) {
     }
   };
   const record = (t, id, extra) => write(t, id, extra) && reload();
+  const LABELS = { high: 'High', medium: 'Medium', low: 'Low' };
+  const setImportance = (id, level) => {
+    const t = data.get(id);
+    const next = LEVELS.includes(level) ? level : '';
+    if (t && t.importance !== next) return record('importance', id, { level: next });
+  };
 
   let cardsPanel; // the Review cards webview, once VS Code has opened it
   let cardsReady = false; // true once its script has loaded and asked for the comments
@@ -75,7 +87,7 @@ async function activate(context) {
     if (!cardsPanel || !cardsReady) return;
     const cards = [...data.values()].map((t) => {
       const lv = live.get(t.id) || { status: 'detached', line: -1 };
-      return { id: t.id, file: t.file, line: lv.line, status: lv.status, resolved: t.resolved, exact: t.exact, messages: t.messages };
+      return { id: t.id, file: t.file, line: lv.line, status: lv.status, resolved: t.resolved, importance: t.importance, exact: t.exact, messages: t.messages };
     });
     const compose = pending ? { file: pending.file, line: pending.line, exact: pending.anchor.exact } : null;
     cardsPanel.webview.postMessage({ type: 'state', cards, activeId, compose, focus: focusReply });
@@ -123,7 +135,7 @@ async function activate(context) {
         .filter(Boolean)
         .join(' · ');
       item.tooltip = `"${t.exact}"\n\n` + t.messages.map((m) => `${m.author}: ${m.text}`).join('\n\n');
-      item.iconPath = new vscode.ThemeIcon(t.resolved ? 'check' : lv.status === 'detached' ? 'warning' : 'comment');
+      item.iconPath = t.resolved ? new vscode.ThemeIcon('check') : new vscode.ThemeIcon(lv.status === 'detached' ? 'warning' : 'comment', t.importance ? new vscode.ThemeColor(`marginalia.${t.importance}ImportanceOverviewRuler`) : undefined);
       item.contextValue = t.resolved ? 'resolved' : 'open';
       item.command = { command: 'marginalia.reveal', title: 'Open comment', arguments: [t.id] };
       return item;
@@ -212,14 +224,14 @@ async function activate(context) {
           // edited until the new wording is saved to the store
           const status = squash(anchor.exact).s === squash(t.exact).s ? 'exact' : 'edited';
           lv = { start: found.start, end: found.end, tracked: file.open, version: file.version, size: file.text.length, line: a.line, range: new vscode.Range(a.line, a.character, b.line, b.character), anchor, status, growing };
-          if (!t.resolved) marks.set(t.file, [...(marks.get(t.file) || []), lv.range]);
+          if (!t.resolved) marks.set(t.file, [...(marks.get(t.file) || []), { range: lv.range, level: t.importance }]);
         } else {
           // a comment whose text was deleted keeps its place, so text typed or undone there brings it back
           lv = { start: hint, end: hint, tracked: !!kept, version: kept?.version, size: kept?.size, line: -1, range: undefined, anchor: prev?.anchor ?? t, status: 'detached', growing };
         }
         live.set(t.id, lv);
 
-        const sig = [t.file, t.messages.length, t.resolved, lv.status, lv.line].join('|');
+        const sig = [t.file, t.messages.length, t.resolved, t.importance, lv.status, lv.line].join('|');
         if (shown.get(t.id) !== sig) {
           shown.set(t.id, sig);
           changed = true;
@@ -228,7 +240,9 @@ async function activate(context) {
 
       for (const editor of vscode.window.visibleTextEditors) {
         const rel = relOf(editor.document.uri);
-        if (!onlyFile || rel === onlyFile) editor.setDecorations(highlight, enabled(editor.document) ? marks.get(rel) || [] : []);
+        if (onlyFile && rel !== onlyFile) continue;
+        const here = enabled(editor.document) ? marks.get(rel) || [] : [];
+        for (const [level, style] of styles) editor.setDecorations(style, here.filter((m) => m.level === level).map((m) => m.range));
       }
 
       if (changed) {
@@ -383,7 +397,8 @@ async function activate(context) {
             }
             const id = crypto.randomBytes(4).toString('hex');
             const { file, anchor, offset } = pending;
-            if (!write('thread', id, { file, ...anchor, offset, text: msg.text.trim() })) return panel.webview.postMessage({ type: 'restore', id: 'new', text: msg.text });
+            const importance = LEVELS.includes(msg.importance) ? msg.importance : undefined;
+            if (!write('thread', id, { file, ...anchor, offset, importance, text: msg.text.trim() })) return panel.webview.postMessage({ type: 'restore', id: 'new', text: msg.text });
             pending = null;
             activeId = id;
             focusReply = id;
@@ -399,6 +414,7 @@ async function activate(context) {
           }
           if (msg.type === 'go') return reveal(msg.id);
           if (msg.type === 'resolve') return record('status', msg.id, { resolved: msg.resolved === true });
+          if (msg.type === 'importance') return setImportance(msg.id, msg.level);
           if (msg.type === 'reply' && typeof msg.text === 'string' && msg.text.trim()) return record('reply', msg.id, { text: msg.text.trim() }) || panel.webview.postMessage({ type: 'restore', id: msg.id, text: msg.text });
           if (msg.type === 'delete') {
             const answer = await vscode.window.showWarningMessage('Delete this comment thread?', { modal: true, detail: 'It is removed for everyone who gets this comments file.' }, 'Delete');
@@ -501,7 +517,7 @@ async function activate(context) {
 
   context.subscriptions.push(
     out,
-    highlight,
+    ...styles.values(),
     view,
     storageView,
     treeChanged,
@@ -559,7 +575,7 @@ async function activate(context) {
           if (!here.length) return;
           const cards = here.map((t) => {
             const md = new vscode.MarkdownString('', true);
-            md.isTrusted = { enabledCommands: ['marginalia.resolve', 'marginalia.reply'] };
+            md.isTrusted = { enabledCommands: ['marginalia.resolve', 'marginalia.reply', 'marginalia.setImportance'] };
             const arg = encodeURIComponent(JSON.stringify([t.id]));
             t.messages.forEach((m, i) => {
               const d = new Date(m.ts);
@@ -570,7 +586,8 @@ async function activate(context) {
               md.appendMarkdown('\n\n').appendText(m.text);
             });
             if (live.get(t.id).status === 'edited') md.appendMarkdown('\n\n_Commented text has changed_');
-            return md.appendMarkdown(`\n\n[$(reply) Reply](command:marginalia.reply?${arg})`);
+            md.appendMarkdown(`\n\n[$(reply) Reply](command:marginalia.reply?${arg})&nbsp;&nbsp;[$(circle-filled) ${t.importance ? LABELS[t.importance] + ' importance' : 'Set importance'}](command:marginalia.setImportance?${arg})`);
+            return md;
           });
           return new vscode.Hover(cards, live.get(here[0].id).range);
         },
@@ -661,6 +678,17 @@ async function activate(context) {
         if (data.has(id)) return record('status', id, { resolved });
       })
     ),
+
+    vscode.commands.registerCommand('marginalia.setImportance', async (arg) => {
+      const id = typeof arg === 'string' ? arg : (arg?.id ?? activeId);
+      const t = data.get(id);
+      if (!t) return vscode.window.showInformationMessage('Marginalia: put the cursor in commented text first.');
+      const picked = await vscode.window.showQuickPick(
+        ['', ...LEVELS].map((level) => ({ label: (level === t.importance ? '$(check) ' : '') + (level ? LABELS[level] : 'Normal'), level })),
+        { title: 'Importance of this comment' }
+      );
+      if (picked) setImportance(id, picked.level);
+    }),
 
     vscode.commands.registerCommand('marginalia.reply', async (arg) => {
       const id = typeof arg === 'string' ? arg : arg?.id;

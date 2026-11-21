@@ -45,7 +45,8 @@ async function setup({ files = {}, store = '', open = [] } = {}) {
     else docs.push(doc);
     let editor = vscode.window.visibleTextEditors.find((e) => e.document.uri.fsPath === doc.uri.fsPath);
     if (!editor) {
-      editor = { selection: new Range(0, 0, 0, 0), setDecorations: (_type, ranges) => marks.set(rel, ranges) };
+      const styles = new Map();
+      editor = { selection: new Range(0, 0, 0, 0), setDecorations: (type, ranges) => (styles.set(type, ranges), marks.set(rel, [...styles.values()].flat())) };
       vscode.window.visibleTextEditors.push(editor);
     }
     editor.document = doc;

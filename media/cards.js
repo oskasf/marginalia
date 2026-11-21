@@ -5,11 +5,15 @@ const saved = vscode.getState() || {};
 const drafts = saved.drafts || {};
 let composeKey = saved.composeKey || null;
 let resolvedOpen = saved.resolvedOpen || false;
+let composeLevel = saved.composeLevel || '';
+let picking = null; // id of the card whose importance choices are showing
+const LEVELS = [['high', 'High'], ['medium', 'Medium'], ['low', 'Low'], ['', 'Normal']];
+const levelName = (level) => (LEVELS.find(([l]) => l === level) || LEVELS[3])[1];
 let composing = false;
 let deferred = false;
 let pressed = false; // a mouse button is down in the panel, so redrawing now would swallow the click
 let lastBox = null; // the reply box that last had focus, to give it back when VS Code refocuses the panel
-const save = () => vscode.setState({ drafts, composeKey, resolvedOpen });
+const save = () => vscode.setState({ drafts, composeKey, resolvedOpen, composeLevel });
 
 const el = (tag, className, text) => {
   const node = document.createElement(tag);
@@ -28,18 +32,48 @@ const ago = (ts) => {
   return new Date(ts).toLocaleDateString();
 };
 
+// a row of coloured buttons, one per importance, that calls choose with the picked one
+function makeLevels(current, choose) {
+  const row = el('div', 'levels');
+  row.setAttribute('role', 'group');
+  row.setAttribute('aria-label', 'Importance');
+  for (const [level, label] of LEVELS) {
+    const button = el('button', 'level' + (level === current ? ' on' : ''));
+    button.append(el('span', 'dot imp-' + (level || 'normal')), label);
+    button.setAttribute('aria-pressed', String(level === current));
+    button.dataset.level = level;
+    button.dataset.focus = 'importance';
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      choose(level);
+    });
+    row.append(button);
+  }
+  return row;
+}
+
 const fit = (box) => {
   box.style.height = 'auto';
   box.style.height = box.scrollHeight + 2 + 'px';
 };
 
 function makeCard(c) {
-  const card = el('div', 'card' + (c.resolved ? ' resolved' : '') + (c.id === state.activeId ? ' active' : '') + (drafts[c.id] ? ' hasdraft' : ''));
+  const card = el('div', 'card imp-' + (c.importance || 'normal') + (c.resolved ? ' resolved' : '') + (c.id === state.activeId ? ' active' : '') + (drafts[c.id] ? ' hasdraft' : ''));
   card.dataset.id = c.id;
   const first = c.messages[0] || { author: 'unknown', text: '' };
 
   const head = el('div', 'head');
-  head.append(el('span', 'author', first.author), el('span', 'meta', ago(first.ts)), el('span', 'spacer'));
+  const dot = el('button', 'dot imp-' + (c.importance || 'normal'));
+  dot.title = `Importance: ${levelName(c.importance)}. Click to change`;
+  dot.setAttribute('aria-label', dot.title);
+  dot.setAttribute('aria-expanded', String(picking === c.id));
+  dot.dataset.focus = 'importance';
+  dot.addEventListener('click', (e) => {
+    e.stopPropagation();
+    picking = picking === c.id ? null : c.id;
+    draw();
+  });
+  head.append(dot, el('span', 'author', first.author), el('span', 'meta', ago(first.ts)), el('span', 'spacer'));
   if (c.line >= 0) head.append(el('span', 'meta', 'L' + (c.line + 1)));
   for (const [label, className, title, message] of [
     ['Delete', 'link del', 'Delete this comment and its replies', { type: 'delete', id: c.id }],
@@ -61,7 +95,17 @@ function makeCard(c) {
   quote.dataset.focus = 'quote';
   quote.setAttribute('role', 'button');
   quote.setAttribute('aria-label', 'Go to commented text: ' + c.exact);
-  card.append(head, quote);
+  card.append(head);
+  if (picking === c.id) {
+    card.append(
+      makeLevels(c.importance || '', (level) => {
+        picking = null;
+        vscode.postMessage({ type: 'importance', id: c.id, level });
+        draw();
+      })
+    );
+  }
+  card.append(quote);
 
   if (c.status === 'edited') card.append(el('div', 'note', 'Text changed since this comment'));
   if (c.status === 'detached') card.append(el('div', 'note warn', 'Text not found in the file'));
@@ -85,10 +129,21 @@ function makeCard(c) {
 }
 
 function makeCompose(c) {
-  const card = el('div', 'card compose active');
+  const card = el('div', 'card compose active imp-' + (composeLevel || 'normal'));
   const head = el('div', 'head');
   head.append(el('span', 'author', 'New comment'), el('span', 'spacer'), el('span', 'meta', c.file + ' · L' + (c.line + 1)));
-  card.append(head, el('div', 'quote', c.exact));
+  // updated in place, so the comment being typed keeps its focus
+  const levels = makeLevels(composeLevel, (level) => {
+    composeLevel = level;
+    save();
+    card.className = 'card compose active imp-' + (level || 'normal');
+    for (const button of levels.children) {
+      button.classList.toggle('on', button.dataset.level === level);
+      button.setAttribute('aria-pressed', String(button.dataset.level === level));
+    }
+    box.focus();
+  });
+  card.append(head, levels, el('div', 'quote', c.exact));
 
   const box = el('textarea', 'replybox');
   box.rows = 2;
@@ -135,6 +190,7 @@ root.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && id !== 'new') target.blur();
   if (e.key === 'Escape' && id === 'new') {
     delete drafts.new;
+    composeLevel = '';
     save();
     vscode.postMessage({ type: 'cancel' });
   }
@@ -147,7 +203,11 @@ root.addEventListener('keydown', (e) => {
   target.closest('.card').classList.remove('hasdraft');
   target.value = '';
   fit(target);
-  vscode.postMessage(id === 'new' ? { type: 'create', text } : { type: 'reply', id, text });
+  vscode.postMessage(id === 'new' ? { type: 'create', text, importance: composeLevel || undefined } : { type: 'reply', id, text });
+  if (id === 'new') {
+    composeLevel = '';
+    save();
+  }
 });
 
 function markActive(scroll) {
@@ -169,7 +229,10 @@ function draw() {
 
   const key = state.compose ? [state.compose.file, state.compose.line, state.compose.exact].join('|') : null;
   const freshCompose = key !== null && key !== composeKey;
-  if (freshCompose) delete drafts.new;
+  if (freshCompose) {
+    delete drafts.new;
+    composeLevel = '';
+  }
   if (key !== composeKey) {
     composeKey = key;
     save();
