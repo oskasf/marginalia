@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+- A comment now stays put when you replace all of its text. Select the commented text, or more, and type over it, or delete it and type something new, and the comment moves onto what you type, even when you type it one key at a time. Before, it shrank to the first letter typed, or showed "Text not found" when the words around it were replaced too. If the old text turns up somewhere else, as after cut and paste, the comment still goes with it.
+
 ## 0.1.2
 
 - Resolve and Delete in the Review panel now always respond to a click. Before, a click could be lost when the panel jumped back to a reply box as you clicked into it from the editor, or when the cards were redrawn while the mouse button was held down. The buttons also have a larger click area, so a click just beside the word no longer opens the comment instead.
