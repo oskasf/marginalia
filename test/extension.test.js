@@ -402,6 +402,77 @@ test('a comment whose text is deleted comes back when new text is typed in its p
   assert.strictEqual(sliceByRange(text, h.editor.marks[0]), 'Citations rise.');
 });
 
+// Types text one key at a time at offset, the way VS Code reports each keystroke
+const typeAt = (edit, offset, text) => {
+  let out;
+  for (let i = 0; i < text.length; i++) out = edit([{ rangeOffset: offset + i, rangeLength: 0, text: text[i] }]);
+  return out;
+};
+
+test('typing new wording over the selected commented text, one key at a time, keeps the comment on all of it', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = await setup();
+  const edit = typer(h, t);
+  const offset = h.editor.document.getText().indexOf(sentence);
+  edit([replace(h, sentence, 'C')]);
+  const text = typeAt(edit, offset + 1, 'itations rise.');
+  assert.strictEqual(sliceByRange(text, h.editor.marks[0]), 'Citations rise.');
+  h.seen.events.save(h.editor.document);
+  assert.strictEqual(h.storedEvents().filter((e) => e.t === 'anchor').pop().exact, 'Citations rise.');
+});
+
+test('deleting the commented text key by key and typing new wording keeps the comment on the new wording', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = await setup();
+  const edit = typer(h, t);
+  const offset = h.editor.document.getText().indexOf(sentence);
+  for (let i = sentence.length - 1; i >= 0; i--) edit([{ rangeOffset: offset + i, rangeLength: 1, text: '' }]);
+  assert.strictEqual(h.card('a1').status, 'detached');
+  const text = typeAt(edit, offset, 'Citations rise.');
+  assert.strictEqual(h.card('a1').status, 'edited');
+  assert.strictEqual(sliceByRange(text, h.editor.marks[0]), 'Citations rise.');
+});
+
+test('retyping a selection wider than the commented text, words around it included, keeps the comment on what is typed', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = await setup();
+  const edit = typer(h, t);
+  const wide = original.slice(0, original.indexOf(sentence) + sentence.length);
+  edit([replace(h, wide, '\n')]);
+  const text = typeAt(edit, 1, 'A new opening.');
+  assert.strictEqual(sliceByRange(text, h.editor.marks[0]), 'A new opening.');
+});
+
+test('once the new wording is typed, text typed after it elsewhere first is not added to the comment', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = await setup();
+  const edit = typer(h, t);
+  const offset = h.editor.document.getText().indexOf(sentence);
+  edit([replace(h, sentence, '')]);
+  typeAt(edit, offset, 'Citations rise.');
+  edit([{ rangeOffset: 0, rangeLength: 0, text: 'Title. ' }]);
+  const text = edit([{ rangeOffset: offset + 'Title. Citations rise.'.length, rangeLength: 0, text: ' Later.' }]);
+  assert.strictEqual(sliceByRange(text, h.editor.marks[0]), 'Citations rise.');
+});
+
+test('commented text that is cut and pasted elsewhere keeps its comment', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = await setup();
+  const edit = typer(h, t);
+  edit([replace(h, sentence + '\n', '')]);
+  const text = edit([{ rangeOffset: h.editor.document.getText().length, rangeLength: 0, text: '\n' + sentence }]);
+  assert.strictEqual(h.card('a1').status, 'exact');
+  assert.strictEqual(sliceByRange(text, h.editor.marks[0]), sentence);
+});
+
+test('a reload that rewrites the line holding a comment, with the commented text unchanged, keeps it on that text', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = await setup();
+  const text = typer(h, t)([replace(h, sentence, 'Before it. ' + sentence + ' After it.')]);
+  assert.strictEqual(h.card('a1').status, 'exact');
+  assert.strictEqual(sliceByRange(text, h.editor.marks[0]), sentence);
+});
+
 test('a comment is found by its text again when the file reloads in one piece, as after a git pull', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const h = await setup();
