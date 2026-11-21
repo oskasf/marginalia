@@ -200,7 +200,9 @@ async function activate(context) {
         // in an open file the comment is moved along with each edit (see follow), so its text is only searched for when that is not known
         const kept = file?.open && prev?.tracked && prev.version === file.version && prev.size === file.text.length ? prev : null;
         // when the live anchor is lost, the stored one may still fit, e.g. after a co-author's re-anchor arrives with git pull
-        const found = kept?.end > kept?.start ? kept : file && (findAnchor(file.sq, prev?.anchor ?? t, hint) || (prev && findAnchor(file.sq, t, hint)));
+        const held = kept?.end > kept?.start ? kept : null;
+        const found = (held && !held.replaced && held) || (file && (findAnchor(file.sq, prev?.anchor ?? t, hint) || (prev && findAnchor(file.sq, t, hint)))) || held;
+        const growing = !!kept?.growing && (!found || (found.start === kept.start && found.end === kept.end));
 
         let lv;
         if (found) {
@@ -209,11 +211,11 @@ async function activate(context) {
           const anchor = makeAnchor(file.text, found.start, found.end);
           // edited until the new wording is saved to the store
           const status = squash(anchor.exact).s === squash(t.exact).s ? 'exact' : 'edited';
-          lv = { start: found.start, end: found.end, tracked: file.open, version: file.version, size: file.text.length, line: a.line, range: new vscode.Range(a.line, a.character, b.line, b.character), anchor, status };
+          lv = { start: found.start, end: found.end, tracked: file.open, version: file.version, size: file.text.length, line: a.line, range: new vscode.Range(a.line, a.character, b.line, b.character), anchor, status, growing };
           if (!t.resolved) marks.set(t.file, [...(marks.get(t.file) || []), lv.range]);
         } else {
           // a comment whose text was deleted keeps its place, so text typed or undone there brings it back
-          lv = { start: hint, end: hint, tracked: !!kept, version: kept?.version, size: kept?.size, line: -1, range: undefined, anchor: prev?.anchor ?? t, status: 'detached' };
+          lv = { start: hint, end: hint, tracked: !!kept, version: kept?.version, size: kept?.size, line: -1, range: undefined, anchor: prev?.anchor ?? t, status: 'detached', growing };
         }
         live.set(t.id, lv);
 
@@ -429,33 +431,45 @@ async function activate(context) {
   };
 
   // Moves the comments in an open file along with an edit, the way Overleaf does, so rewording their text or the text around them keeps them on it.
-  // Text typed where the commented text was edited becomes part of the comment, and text typed just before or after it does not
+  // Text typed where the commented text was edited becomes part of the comment, and text typed just before or after it does not,
+  // except while the comment's text is being typed afresh after it was deleted or typed over
   const follow = (rel, changes, version) => {
     for (const t of data.values()) {
       const lv = live.get(t.id);
       if (t.file !== rel || !lv?.tracked) continue;
-      let { start, end, size } = lv;
+      let { start, end, size, growing, replaced } = lv;
       // the changes are counted from the text before the edit, so the last one is applied first
       for (const c of [...changes].sort((x, y) => y.rangeOffset - x.rangeOffset)) {
         const o = c.rangeOffset;
         const l = c.rangeLength;
         const n = typeof c.text === 'string' ? c.text.length : NaN;
-        // an edit around the whole comment, such as the file reloading after a git pull, is left to the text search
-        if (!Number.isInteger(o) || !Number.isInteger(l) || isNaN(n) || (o <= start && o + l >= end && l > end - start)) {
+        const over = l > 0 && o <= start && o + l >= end;
+        // the whole file reloading, as after a git pull, or a long paste over the comment is left to the text search
+        if (!Number.isInteger(o) || !Number.isInteger(l) || isNaN(n) || (over && ((o === 0 && l === size) || n > 3 * (end - start) + 200))) {
           lv.tracked = false;
           break;
         }
         size += n - l;
-        if (start === end && l === 0 && o === start) {
+        if (over || (start === end && l === 0 && o === start)) {
+          // what is typed in place of the commented text becomes its text, though the old text is still looked for first in case it was only moved
+          const lead = n - c.text.trimStart().length;
+          start = o + lead;
+          end = Math.max(start, o + n - (n - c.text.trimEnd().length));
+          growing = true;
+          replaced = replaced || over;
+          continue;
+        }
+        if (growing && l === 0 && o === end) {
           end += n;
           continue;
         }
+        if (o > end || o + l < start) growing = false;
         if (start >= o + l) start += n - l;
         else if (start >= o) start = o;
         if (end > o + l) end += n - l;
         else if (end > o) end = o + n;
       }
-      if (lv.tracked) Object.assign(lv, { start, end, size, version });
+      if (lv.tracked) Object.assign(lv, { start, end, size, version, growing, replaced });
     }
   };
 
