@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+- Comments can be marked High, Medium or Low importance. Click the coloured dot on a card in the Review panel, choose one while writing a new comment, or use Set importance in the hover popup. The highlight, scrollbar mark, card edge and Comments list icon then show red, amber or green; normal comments stay purple. The colours can be changed under `workbench.colorCustomizations`. Older versions of Marginalia ignore the importance and show these comments as normal.
+
 ## 0.1.2
 
 - Resolve and Delete in the Review panel now always respond to a click. Before, a click could be lost when the panel jumped back to a reply box as you clicked into it from the editor, or when the cards were redrawn while the mouse button was held down. The buttons also have a larger click area, so a click just beside the word no longer opens the comment instead.

@@ -19,8 +19,9 @@ class Range {
 }
 
 class ThemeIcon {
-  constructor(id) {
+  constructor(id, color) {
     this.id = id;
+    this.color = color;
   }
 }
 ThemeIcon.File = new ThemeIcon('file');
@@ -165,6 +166,7 @@ function createFake(dir) {
       showWarningMessage: async (m) => (seen.warnings.push(m), seen.warningAnswer),
       showInformationMessage: async (m) => seen.infos.push(m),
       showErrorMessage: async (m) => seen.errors.push(m),
+      showQuickPick: async (items, options) => ((seen.quickPick = { items, options }), seen.pickAnswer && items.find(seen.pickAnswer)),
     },
     languages: {
       registerHoverProvider: (selector, provider) => ((seen.hoverSelector = selector), (seen.providers.hover = provider), { dispose() {} }),

@@ -19,6 +19,8 @@ Select some text, leave a comment, and it shows up as a card in the margin. Co-a
 2. Select some text in a `.tex` file, then right-click and choose **Add comment on selection** (or press Ctrl+K Ctrl+M, Cmd+K Cmd+M on a Mac). Type your comment and press Enter.
 3. Commented text is highlighted. Hover over it to read, reply or resolve. Click the Marginalia icon in the activity bar to see every comment as a card.
 
+To mark how important a comment is, click the coloured dot on its card and pick High (red), Medium (amber), Low (green) or Normal (purple). The highlight in your text and the scrollbar mark change to match. You can also pick one while writing a new comment, or from **Set importance** in the hover popup.
+
 Tip: drag the Marginalia icon to the right-hand side of the window to keep the cards next to your text.
 
 ![Adding a comment on a selected line](images/add-comment.png)
@@ -51,7 +53,7 @@ Comments are on for `.tex` files by default. To use them in another kind of file
 | `marginalia.root` | The folder that holds `.comments.jsonl`. Defaults to the top of your git repository. |
 | `marginalia.files` | Which files can have comments. Defaults to `["**/*.tex"]`. |
 
-To change the colours, use `marginalia.highlightBackground` and `marginalia.overviewRuler` under `workbench.colorCustomizations`. If something isn't working, open View > Output and choose "Marginalia".
+To change the colours, use `marginalia.highlightBackground` and `marginalia.overviewRuler` under `workbench.colorCustomizations`, and the same with `high`, `medium` or `low` in front for each importance, such as `marginalia.highImportanceBackground` and `marginalia.highImportanceOverviewRuler`. If something isn't working, open View > Output and choose "Marginalia".
 
 ## File format
 
@@ -63,6 +65,7 @@ Each line of `.comments.jsonl` is one JSON object. People and LLMs can add comme
 
 - A thread needs `file` (relative to the root) and `exact` (the text to attach to). `id` is optional, and may only use letters, digits, `_` and `-`.
 - `prefix`, `suffix` and `offset` are optional. They tell apart copies of the same words.
+- `importance` is optional: `"high"`, `"medium"` or `"low"`. Changing it later adds an `importance` line, such as `{"t":"importance","id":"a1b2c3d4","level":"high"}`, where `"level":""` means normal.
 - The extension also writes `ts` timestamps, `anchor` lines (which move a comment to edited text), `move` lines (when a file is renamed or moved in VS Code) and `delete` lines.
 - Lines that aren't valid JSON are skipped. This includes git conflict markers.
 

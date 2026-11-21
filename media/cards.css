@@ -29,8 +29,8 @@ body {
 }
 
 .card.active {
-  border-color: var(--vscode-marginalia-overviewRuler, var(--vscode-focusBorder));
-  box-shadow: 0 0 0 1px var(--vscode-marginalia-overviewRuler, var(--vscode-focusBorder));
+  border-color: var(--imp, var(--vscode-focusBorder));
+  box-shadow: 0 0 0 1px var(--imp, var(--vscode-focusBorder));
 }
 
 .card.compose {
@@ -176,4 +176,111 @@ button.link:hover {
 .empty {
   margin: 12px 2px;
   opacity: 0.7;
+}
+
+.imp-normal {
+  --imp: var(--vscode-marginalia-overviewRuler, #8b6cff);
+}
+
+.imp-high {
+  --imp: var(--vscode-marginalia-highImportanceOverviewRuler, #f14c4c);
+}
+
+.imp-medium {
+  --imp: var(--vscode-marginalia-mediumImportanceOverviewRuler, #e5a00d);
+}
+
+.imp-low {
+  --imp: var(--vscode-marginalia-lowImportanceOverviewRuler, #4caf50);
+}
+
+.card.imp-high,
+.card.imp-medium,
+.card.imp-low {
+  border-left: 3px solid var(--imp);
+}
+
+/* lines up with cards that have the thicker coloured edge */
+.card.imp-normal {
+  padding-left: 10px;
+}
+
+.card.imp-high .quote {
+  border-left-color: var(--vscode-marginalia-highImportanceBackground, var(--imp));
+}
+
+.card.imp-medium .quote {
+  border-left-color: var(--vscode-marginalia-mediumImportanceBackground, var(--imp));
+}
+
+.card.imp-low .quote {
+  border-left-color: var(--vscode-marginalia-lowImportanceBackground, var(--imp));
+}
+
+.dot {
+  display: inline-block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--imp);
+  align-self: center;
+}
+
+button.dot {
+  margin: -4px;
+  width: 17px;
+  height: 17px;
+  border: 4px solid transparent;
+  background-clip: padding-box;
+  cursor: pointer;
+}
+
+.card.imp-normal button.dot {
+  opacity: 0.45;
+}
+
+.card:hover button.dot,
+.card.active button.dot,
+button.dot:focus-visible {
+  opacity: 1;
+}
+
+button.dot:focus-visible,
+button.level:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 5px 0 3px;
+}
+
+button.level {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--vscode-foreground);
+  background: none;
+  border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.4));
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+button.level:hover {
+  border-color: var(--vscode-focusBorder, rgba(128, 128, 128, 0.7));
+}
+
+button.level.on {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-activeSelectionBackground, rgba(128, 128, 128, 0.2));
+  color: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
 }

@@ -3,6 +3,9 @@ const path = require('path');
 const crypto = require('crypto');
 
 const str = (v) => (typeof v === 'string' ? v : '');
+// how important a comment is; anything else, including none, means normal
+const LEVELS = ['high', 'medium', 'low'];
+const level = (v) => (LEVELS.includes(v) ? v : '');
 
 // A file path relative to the root, or null when it is missing or points outside the root
 function cleanFile(v) {
@@ -26,11 +29,12 @@ function parse(text) {
     if (!ev || typeof ev !== 'object') continue;
     const message = { author: str(ev.author) || 'unknown', ts: str(ev.ts) || undefined, text: str(ev.text) };
 
-    if (['reply', 'status', 'anchor', 'delete', 'move'].includes(ev.t)) {
+    if (['reply', 'status', 'anchor', 'delete', 'move', 'importance'].includes(ev.t)) {
       const t = threads.get(String(ev.id));
       if (!t) continue;
       if (ev.t === 'reply' && message.text) t.messages.push(message);
       if (ev.t === 'status' && typeof ev.resolved === 'boolean') t.resolved = ev.resolved;
+      if (ev.t === 'importance') t.importance = level(ev.level);
       if (ev.t === 'delete') threads.delete(t.id);
       if (ev.t === 'move' && cleanFile(ev.file)) t.file = cleanFile(ev.file);
       if (ev.t === 'anchor' && str(ev.exact).trim()) Object.assign(t, { exact: ev.exact, prefix: str(ev.prefix), suffix: str(ev.suffix), offset: Number.isInteger(ev.offset) ? ev.offset : 0 });
@@ -51,6 +55,7 @@ function parse(text) {
       offset: Number.isInteger(ev.offset) ? ev.offset : 0,
       messages: message.text ? [message] : [],
       resolved: false,
+      importance: level(ev.importance),
     });
   }
   return threads;
@@ -80,4 +85,4 @@ function append(file, event) {
   }
 }
 
-module.exports = { parse, read, append };
+module.exports = { parse, read, append, LEVELS };

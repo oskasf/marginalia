@@ -36,7 +36,12 @@ async function setup(tweak) {
     lineAt: (n) => ({ range: new Range(n, 0, n, text.split('\n')[n].length) }),
   });
   const editor = { document: makeDoc(original), selection: new Range(0, 0, 0, 0), marks: [] };
-  editor.setDecorations = (type, ranges) => (editor.marks = ranges);
+  const styles = new Map();
+  editor.setDecorations = (type, ranges) => {
+    styles.set(type, ranges);
+    editor.marks = [...styles.values()].flat();
+    editor.styles = styles;
+  };
   vscode.workspace.textDocuments.push(editor.document);
   vscode.window.visibleTextEditors.push(editor);
   vscode.window.activeTextEditor = editor;
@@ -126,7 +131,7 @@ test('hovering commented text shows the comment with Resolve and Reply links', a
   assert.match(popup.value, /\(command:marginalia\.resolve\?%5B%22a1%22%5D\)/);
   assert.match(popup.value, /\(command:marginalia\.reply\?%5B%22a1%22%5D\)/);
   assert.ok(popup.supportThemeIcons);
-  assert.deepStrictEqual(popup.isTrusted.enabledCommands, ['marginalia.resolve', 'marginalia.reply'], 'the popup can only run those two commands');
+  assert.deepStrictEqual(popup.isTrusted.enabledCommands, ['marginalia.resolve', 'marginalia.reply', 'marginalia.setImportance'], 'the popup can only run those three commands');
   assert.strictEqual(h.hoverAt(0, 3), undefined, 'text without a comment shows nothing');
   assert.match(h.hoverAt(2, 20).contents[0].value, /Claude \(LLM\)/);
   assert.strictEqual(h.hoverAt(1, 10, h.makeDoc(original, 'git')), undefined, 'a git diff of the same file shows nothing');
@@ -511,4 +516,44 @@ test('closing the extension disposes what it created', async () => {
   const h = await setup();
   assert.ok(h.context.subscriptions.every((s) => typeof s.dispose === 'function'));
   for (const s of h.context.subscriptions) s.dispose();
+});
+
+test('importance set in the panel or the popup colours the highlight, card and tree, and is stored', async () => {
+  const h = await setup();
+  assert.strictEqual(h.card('a1').importance, '');
+  await h.send({ type: 'importance', id: 'a1', level: 'high' });
+  const { t, id, author, level } = h.storedEvents().pop();
+  assert.deepStrictEqual({ t, id, author, level }, { t: 'importance', id: 'a1', author: 'Tester', level: 'high' });
+  assert.strictEqual(h.card('a1').importance, 'high');
+  const style = (name) => [...h.editor.styles.keys()].find((s) => String(s.options.backgroundColor.id) === name);
+  assert.deepStrictEqual(h.editor.styles.get(style('marginalia.highImportanceBackground')).map((r) => sliceByRange(original, r)), [sentence]);
+  assert.deepStrictEqual(h.editor.styles.get(style('marginalia.highlightBackground')).map((r) => sliceByRange(original, r)), ['targeted grants matter']);
+  assert.strictEqual(h.tree.getTreeItem({ kind: 'thread', id: 'a1' }).iconPath.color.id, 'marginalia.highImportanceOverviewRuler');
+  assert.match(h.hoverAt(1, 10).contents[0].value, /High importance\]\(command:marginalia\.setImportance\?%5B%22a1%22%5D\)/);
+
+  const count = h.storedEvents().length;
+  await h.send({ type: 'importance', id: 'a1', level: 'high' });
+  await h.send({ type: 'importance', id: 'nope', level: 'low' });
+  assert.strictEqual(h.storedEvents().length, count, 'an unchanged level or a missing comment writes nothing');
+
+  h.seen.pickAnswer = (item) => item.level === 'low';
+  await h.seen.handlers['marginalia.setImportance']('a1');
+  assert.ok(h.seen.quickPick.items.some((item) => item.level === 'high' && /^\$\(check\)/.test(item.label)), 'the current level is ticked');
+  assert.strictEqual(h.card('a1').importance, 'low');
+  await h.send({ type: 'importance', id: 'a1', level: 'bogus' });
+  assert.strictEqual(h.card('a1').importance, '', 'anything else means normal');
+});
+
+test('a new comment can be given an importance as it is posted', async () => {
+  const h = await setup();
+  h.editor.selection = new Range(0, 13, 0, 27);
+  await h.seen.handlers['marginalia.addOnSelection']();
+  await h.send({ type: 'create', text: 'Check this', importance: 'medium' });
+  const added = h.storedEvents().find((e) => e.exact === 'funding shapes');
+  assert.strictEqual(added.importance, 'medium');
+  assert.strictEqual(h.card(added.id).importance, 'medium');
+  h.editor.selection = new Range(0, 0, 0, 8);
+  await h.seen.handlers['marginalia.addOnSelection']();
+  await h.send({ type: 'create', text: 'Fine', importance: 'whatever' });
+  assert.strictEqual(h.storedEvents().find((e) => e.exact === 'We study').importance, undefined);
 });
