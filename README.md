@@ -21,6 +21,8 @@ Select some text, leave a comment, and it shows up as a card in the margin. Co-a
 
 To mark how important a comment is, click the coloured dot on its card and pick High (red), Medium (amber), Low (green) or Normal (purple). The highlight in your text and the scrollbar mark change to match. You can also pick one while writing a new comment, or from **Set importance** in the hover popup.
 
+![Comments marked High, Medium and Low importance, with matching highlights, scrollbar marks and the importance picker open on a card](images/importance.png)
+
 Tip: drag the Marginalia icon to the right-hand side of the window to keep the cards next to your text.
 
 ![Adding a comment on a selected line](images/add-comment.png)
