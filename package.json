@@ -12,7 +12,7 @@
     "academic",
     "markdown"
   ],
-  "version": "0.1.5",
+  "version": "0.1.6",
   "license": "MIT",
   "icon": "media/icon.png",
   "galleryBanner": {
@@ -49,6 +49,7 @@
   "activationEvents": [
     "workspaceContains:**/*.tex",
     "workspaceContains:**/.comments.jsonl",
+    "workspaceContains:**/*comments.jsonl",
     "onLanguage:latex",
     "onLanguage:tex"
   ],
@@ -309,7 +310,12 @@
         "marginalia.root": {
           "type": "string",
           "default": "",
-          "description": "Folder that holds .comments.jsonl and that comment file paths are relative to. Empty means the git root of the workspace folder, or the workspace folder if there is none."
+          "description": "Folder that holds the comments file and that comment file paths are relative to. Empty means the git root of the workspace folder, or the workspace folder if there is none."
+        },
+        "marginalia.commentsFile": {
+          "type": "string",
+          "default": ".comments.jsonl",
+          "markdownDescription": "Where comments are saved, such as `.marginalia/comments.jsonl`. A relative path is inside the comments root (`#marginalia.root#`), and folders are created as needed. When you change it, Marginalia offers to move the comments already saved."
         },
         "marginalia.author": {
           "type": "string",

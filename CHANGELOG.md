@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.6
+
+- The comments file can now be moved or renamed with the new `marginalia.commentsFile` setting, for example to `.marginalia/comments.jsonl`. A relative path is inside the comments root, and a full path works too. The folder is created with your first comment, and when you change the setting Marginalia offers to move the comments already saved. The default is still `.comments.jsonl`.
+
 ## 0.1.5
 
 - Comments can be marked High, Medium or Low importance. Click the coloured dot on a card in the Review panel, choose one while writing a new comment, or use Set importance in the hover popup. The highlight, scrollbar mark, card edge and Comments list icon then show red, amber or green; normal comments stay purple. The colours can be changed under `workbench.colorCustomizations`. Older versions of Marginalia ignore the importance and show these comments as normal.

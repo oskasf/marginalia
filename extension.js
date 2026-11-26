@@ -30,6 +30,7 @@ async function activate(context) {
   const git = (cwd, ...args) => (vscode.workspace.isTrusted ? exec('git', args, { cwd }).then((r) => r.stdout.trim(), () => null) : Promise.resolve(null));
   let root = folder;
   let storePath = path.join(root, '.comments.jsonl');
+  let storeName = '.comments.jsonl'; // how the store is shown: relative to the root when inside it, else its full path
   let author = os.userInfo().username;
   let watchers = [];
   let selector = []; // one filter per glob in the marginalia.files setting
@@ -53,6 +54,7 @@ async function activate(context) {
   const shown = new Map(); // id -> what was last sent to the sidebar, so we only update on change
   let sharing = { label: 'Checking', note: '', icon: 'loading~spin' };
 
+  const tilde = (p) => (p === os.homedir() || p.startsWith(os.homedir() + path.sep) ? '~' + p.slice(os.homedir().length) : p);
   const relOf = (uri) => {
     if (uri.scheme !== 'file') return null;
     const rel = path.relative(root, uri.fsPath).split(path.sep).join('/');
@@ -150,7 +152,7 @@ async function activate(context) {
       getTreeItem: (item) => item,
       getChildren: () => {
         const exists = lastText != null;
-        const file = new vscode.TreeItem('.comments.jsonl');
+        const file = new vscode.TreeItem(storeName);
         file.iconPath = new vscode.ThemeIcon('file');
         file.tooltip = storePath;
         file.description = exists ? `${data.size} thread${data.size === 1 ? '' : 's'} · ${(Buffer.byteLength(lastText) / 1024).toFixed(1)} KB` : 'not created yet';
@@ -158,7 +160,7 @@ async function activate(context) {
 
         const place = new vscode.TreeItem('Folder');
         place.iconPath = new vscode.ThemeIcon('folder');
-        place.description = root === os.homedir() || root.startsWith(os.homedir() + path.sep) ? '~' + root.slice(os.homedir().length) : root;
+        place.description = tilde(root);
         place.tooltip = `${root}\nClick to show it in your file manager`;
         place.command = { command: 'revealFileInOS', title: 'Show in file manager', arguments: [vscode.Uri.file(exists ? storePath : root)] };
 
@@ -294,13 +296,15 @@ async function activate(context) {
   async function checkSharing() {
     if (!storageView.visible) return;
     let [label, note, icon] = ['Stays on this computer', 'not in a git repository', 'device-desktop'];
-    const inRepo = lastText !== null && (await git(root, 'rev-parse', '--is-inside-work-tree')) !== null;
+    // git runs next to the store, which exists whenever lastText is set
+    const [dir, base] = [path.dirname(storePath), path.basename(storePath)];
+    const inRepo = lastText !== null && (await git(dir, 'rev-parse', '--is-inside-work-tree')) !== null;
     if (lastText === null) [label, note, icon] = ['Nothing saved yet', 'created with your first comment', 'circle-outline'];
     else if (!vscode.workspace.isTrusted) note = 'git is not checked in an untrusted folder';
-    else if (inRepo && (await git(root, 'check-ignore', '-q', '.comments.jsonl')) !== null) note = 'ignored by git';
-    else if (inRepo && (await git(root, 'ls-files', '--error-unmatch', '.comments.jsonl')) !== null) {
+    else if (inRepo && (await git(dir, 'check-ignore', '-q', base)) !== null) note = 'ignored by git';
+    else if (inRepo && (await git(dir, 'ls-files', '--error-unmatch', base)) !== null) {
       label = 'Shared through git';
-      note = (await git(root, 'diff', '--quiet', 'HEAD', '--', '.comments.jsonl')) !== null ? 'committed' : 'new comments not committed yet';
+      note = (await git(dir, 'diff', '--quiet', 'HEAD', '--', base)) !== null ? 'committed' : 'new comments not committed yet';
       icon = 'source-control';
     } else if (inRepo) [label, note, icon] = ['Not shared yet', 'git add and commit it so co-authors can see it', 'info'];
     sharing = { label, note, icon };
@@ -317,12 +321,19 @@ async function activate(context) {
     const top = path.resolve(folder, config.get('root') || (await git(folder, 'rev-parse', '--show-cdup')) || '.');
     const name = config.get('author') || (await git(top, 'config', 'user.name')) || os.userInfo().username;
     if (run !== runs) return; // a newer run has started
-    if (top !== root) pending = null; // a comment being typed survives other setting changes
+    // the store's path is relative to the root unless it is absolute, and ~ is the home folder
+    const where = String(config.get('commentsFile') || '').trim() || '.comments.jsonl';
+    const next = path.resolve(top, where.replace(/^~(?=$|[\\/])/, os.homedir()));
+    const [was, sameRoot] = [storePath, top === root];
+    if (!sameRoot) pending = null; // a comment being typed survives other setting changes
     root = top;
-    storePath = path.join(root, '.comments.jsonl');
+    storePath = next;
     author = name;
+    const rel = path.relative(root, storePath);
+    const inside = rel && rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel);
+    storeName = inside ? rel.split(path.sep).join('/') : tilde(storePath);
     watchers.forEach((w) => w.dispose());
-    const store = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(root), '.comments.jsonl'));
+    const store = vscode.workspace.createFileSystemWatcher(inside ? new vscode.RelativePattern(vscode.Uri.file(root), storeName) : new vscode.RelativePattern(vscode.Uri.file(path.dirname(storePath)), path.basename(storePath)));
     store.onDidChange(reload);
     store.onDidCreate(reload);
     store.onDidDelete(reload);
@@ -343,9 +354,40 @@ async function activate(context) {
     activeId = null;
     changed = true;
     out.appendLine(`root: ${root}`);
+    out.appendLine(`comments file: ${storePath}`);
     out.appendLine(`author: ${author}`);
     await reload(true);
     out.appendLine(`threads loaded: ${data.size}`);
+    // when only marginalia.commentsFile changed, offer to bring the comments already saved along, without waiting for the answer
+    if (e && sameRoot && was !== storePath && lastText === null && safeRead(was)) offerMove(was, storePath);
+  }
+
+  const safeRead = (file) => {
+    try {
+      return read(file);
+    } catch {
+      return null;
+    }
+  };
+  function offerMove(from, to) {
+    const name = storeName;
+    vscode.window.showInformationMessage(`Marginalia: comments are now saved in ${name}. Move the comments already in ${tilde(from)} there?`, 'Move').then(async (answer) => {
+      if (answer !== 'Move' || storePath !== to || fs.existsSync(to) || !safeRead(from)) return;
+      try {
+        fs.mkdirSync(path.dirname(to), { recursive: true });
+        try {
+          fs.renameSync(from, to);
+        } catch (e) {
+          if (e.code !== 'EXDEV') throw e;
+          fs.copyFileSync(from, to, fs.constants.COPYFILE_EXCL);
+          fs.rmSync(from);
+        }
+      } catch (e) {
+        return vscode.window.showErrorMessage(`Marginalia: could not move the comments to ${name}: ${e.message}`);
+      }
+      out.appendLine(`moved ${from} to ${to}`);
+      return reload(true);
+    });
   }
 
   async function reveal(id) {

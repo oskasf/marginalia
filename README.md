@@ -29,13 +29,13 @@ Tip: drag the Marginalia icon to the right-hand side of the window to keep the c
 
 ## Where comments are stored
 
-Comments live in one file, `.comments.jsonl`, at the top of your git repository. If there's no repository, the file goes in the folder you opened. To use a different folder, set `marginalia.root`.
+Comments live in one file, `.comments.jsonl`, at the top of your git repository. If there's no repository, the file goes in the folder you opened. To use a different folder, set `marginalia.root`. To give the file another name or put it in a subfolder, set `marginalia.commentsFile`, for example to `.marginalia/comments.jsonl`. Marginalia then offers to move the comments you already have.
 
 Comments are attached to the text they quote, not to a line number, so they survive edits elsewhere in the file and reflowed paragraphs. If the commented text itself changes, the comment follows it and its card says so.
 
 ## Sharing with co-authors
 
-Commit `.comments.jsonl` like any other file, and your co-authors see your comments when they pull. So that two people commenting at the same time never get a merge conflict, add this line to `.gitattributes`:
+Commit `.comments.jsonl` (or the file you chose) like any other file, and your co-authors see your comments when they pull. So that two people commenting at the same time never get a merge conflict, add this line to `.gitattributes`:
 
     .comments.jsonl merge=union
 
@@ -51,6 +51,7 @@ Comments are on for `.tex` files by default. To use them in another kind of file
 |---|---|
 | `marginalia.author` | The name shown on your comments. Defaults to your git `user.name`. |
 | `marginalia.root` | The folder that holds `.comments.jsonl`. Defaults to the top of your git repository. |
+| `marginalia.commentsFile` | Where comments are saved, relative to the root unless it's a full path. Defaults to `.comments.jsonl`. |
 | `marginalia.files` | Which files can have comments. Defaults to `["**/*.tex"]`. |
 
 To change the colours, use `marginalia.highlightBackground` and `marginalia.overviewRuler` under `workbench.colorCustomizations`, and the same with `high`, `medium` or `low` in front for each importance, such as `marginalia.highImportanceBackground` and `marginalia.highImportanceOverviewRuler`. If something isn't working, open View > Output and choose "Marginalia".
