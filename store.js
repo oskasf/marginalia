@@ -77,6 +77,7 @@ function read(file) {
 function append(file, event) {
   const current = read(file);
   const lead = current && !current.endsWith('\n') ? '\n' : '';
+  if (current === null) fs.mkdirSync(path.dirname(file), { recursive: true });
   const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT | (fs.constants.O_NOFOLLOW ?? 0), 0o644);
   try {
     fs.writeSync(fd, lead + JSON.stringify(event) + '\n');

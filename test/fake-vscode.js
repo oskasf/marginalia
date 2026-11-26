@@ -135,7 +135,7 @@ function createFake(dir) {
       }),
       createFileSystemWatcher: ({ pattern }) => {
         seen.watched.push(pattern);
-        const name = pattern === '.comments.jsonl' ? 'store' : 'files';
+        const name = pattern.endsWith('.jsonl') ? 'store' : 'files';
         return { onDidChange: hook(name + 'Change'), onDidCreate: hook(name + 'Create'), onDidDelete: hook(name + 'Delete'), dispose() {} };
       },
       onDidChangeTextDocument: hook('change'),
@@ -164,7 +164,7 @@ function createFake(dir) {
       onDidChangeWindowState: hook('windowState'),
       registerWebviewViewProvider: (id, provider, options) => ((seen.providers[id] = provider), { dispose() {} }),
       showWarningMessage: async (m) => (seen.warnings.push(m), seen.warningAnswer),
-      showInformationMessage: async (m) => seen.infos.push(m),
+      showInformationMessage: async (m) => (seen.infos.push(m), seen.infoAnswer),
       showErrorMessage: async (m) => seen.errors.push(m),
       showQuickPick: async (items, options) => ((seen.quickPick = { items, options }), seen.pickAnswer && items.find(seen.pickAnswer)),
     },

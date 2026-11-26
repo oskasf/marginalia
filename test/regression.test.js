@@ -410,3 +410,34 @@ test('a comment being typed survives a settings change, and one that cannot be a
   assert.deepStrictEqual(h.posted.pop(), { type: 'restore', id: 'new', text: 'Cite something.' });
   assert.match(h.seen.infos.pop(), /could not be added/);
 });
+
+test('the comments file can live elsewhere, its folder is made on the first comment, and saved comments can be moved there', async () => {
+  const text = 'We conclude that targeted grants matter.';
+  const h = await setup({ files: { 'main.tex': text }, store: [thread('a1', 'main.tex', text, ...anchorOn(text, 'grants'))], open: ['main.tex'] });
+  const moved = path.join(h.dir, '.marginalia', 'comments.jsonl');
+  const settle = () => new Promise((r) => setTimeout(r, 20));
+
+  h.seen.infoAnswer = undefined;
+  await h.vscode.workspace.getConfiguration('marginalia').update('commentsFile', '.marginalia/comments.jsonl');
+  await settle();
+  assert.match(h.seen.infos.pop(), /now saved in \.marginalia\/comments\.jsonl\. Move/);
+  assert.ok(fs.existsSync(h.storePath) && !fs.existsSync(moved), 'nothing moves without a yes');
+  assert.strictEqual(h.state().cards.length, 0, 'the new, empty file is the one in use');
+  assert.strictEqual(h.seen.watched.at(-2), '.marginalia/comments.jsonl');
+  assert.strictEqual(h.storage.getChildren()[0].label, '.marginalia/comments.jsonl');
+
+  h.vscode.window.activeTextEditor.selection = new Range(0, 17, 0, 25);
+  await h.seen.handlers['marginalia.addOnSelection']();
+  await h.send({ type: 'create', text: 'Which ones?' });
+  assert.match(fs.readFileSync(moved, 'utf8'), /Which ones\?/, 'the folder is created for the first comment');
+  assert.doesNotMatch(h.stored(), /Which ones\?/);
+
+  await h.vscode.workspace.getConfiguration('marginalia').update('commentsFile', '');
+  assert.strictEqual(h.state().cards.length, 1, 'an empty setting means .comments.jsonl again');
+  fs.rmSync(moved);
+  h.seen.infoAnswer = 'Move';
+  await h.vscode.workspace.getConfiguration('marginalia').update('commentsFile', path.join(h.dir, 'notes', 'c.jsonl'));
+  await settle();
+  assert.ok(!fs.existsSync(h.storePath) && fs.existsSync(path.join(h.dir, 'notes', 'c.jsonl')), 'an absolute path works and Move moves the file');
+  assert.deepStrictEqual(h.state().cards.map((c) => c.id), ['a1']);
+});
